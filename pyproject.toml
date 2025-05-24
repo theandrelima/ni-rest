@@ -1,0 +1,20 @@
+[project]
+name = "ni-rest"
+version = "0.0.1"
+description = "A REST API wrapper around network-importer"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "André Lima", email = "andre@netcube.consulting"}
+]
+license-expression = "Apache-2.0"
+dependencies = [
+    "network-importer",
+]
+
+[tool.uv.sources]
+network-importer = { git = "https://github.com/theandrelima/network-importer.git", rev = "updating_dependencies" }
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
