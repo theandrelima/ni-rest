@@ -11,6 +11,8 @@ authors = [
 license = {text = "Apache-2.0"}
 
 dependencies = [
+    "django>=5.2.3",
+    "djangorestframework>=3.16.0",
     "network-importer",
 ]
 
