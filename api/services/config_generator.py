@@ -1,12 +1,7 @@
-import tempfile
-import toml
-import os
-from pathlib import Path
 from typing import Any
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
-
+from network_importer.config import DEFAULT_DRIVERS_MAPPING
 from ..models import (
     NetworkImporterInventorySettings,
     NetworkImporterNetCreds,
@@ -14,11 +9,9 @@ from ..models import (
 )
 
 class NetworkImporterConfigGenerator:
-    """
-    Generate network_importer.toml configuration from REST API payload.
-    
+    """   
     This class converts a structured dictionary payload into a valid network-importer
-    TOML configuration file. It uses Django models to manage sensitive credentials
+    configuration dictionary. It uses Django models to manage sensitive credentials
     and service configurations.
     
     Example config_data payload (user-provided):
@@ -61,40 +54,29 @@ class NetworkImporterConfigGenerator:
     Note: Batfish configuration is automatically resolved from BatfishServiceSetting model.
     If "batfish_setting" is not provided, uses the first available BatfishServiceSetting.
     """
-    
-    # Default driver mappings - defined once as class constant
-    DEFAULT_DRIVER_MAPPINGS = {
-        "default": "network_importer.drivers.default",
-        "cisco_asa": "network_importer.drivers.cisco_asa",
-        "cisco_nxos": "network_importer.drivers.cisco_default",
-        "cisco_ios": "network_importer.drivers.cisco_default",
-        "cisco_xr": "network_importer.drivers.cisco_default",
-        "juniper_junos": "network_importer.drivers.juniper_junos",
-        "arista_eos": "network_importer.drivers.arista_eos"
-    }
-    
+
     def __init__(self, site_code: str):
         """
         Initialize the config generator for a specific site.
         
         Args:
-            site_code: Site identifier used for temporary file naming
+            site_code: Site identifier used for naming purposes
         """
         self.site_code = site_code
     
-    def generate_config_file(self, config_data: dict[str, Any]) -> Path:
-        """
-        Generate temporary config file for network-importer.
+    def generate_config_dict(self, config_data: dict[str, Any]) -> dict[str, Any]:
+        """        
+        This method builds the full configuration structure that would normally
+        be written to a TOML file, but returns it as a Python dictionary instead.
         
         Args:
             config_data: Dictionary containing user-provided network-importer configuration
             
         Returns:
-            Path to the generated temporary TOML configuration file
+            Complete configuration dictionary with all sections and nesting
+            that matches the TOML structure expected by network-importer
             
         Raises:
-            OSError: If temporary file creation fails
-            TypeError: If config_data contains invalid types for TOML serialization
             ValidationError: If referenced models don't exist or have invalid env vars
         """
         
@@ -103,31 +85,16 @@ class NetworkImporterConfigGenerator:
             "main": self._get_main_config(config_data.get("main", {})),
             "inventory": self._get_inventory_config(config_data.get("inventory", {})),
             "network": self._get_network_config(config_data.get("network", {})),
-            "logs": self._get_logs_config(config_data.get("logs", {}))
+            "logs": self._get_logs_config(config_data.get("logs", {})),
+            "batfish": self._get_batfish_config_internal(config_data.get("batfish_setting")),
+            "drivers": self._get_drivers_config(config_data.get("drivers", {})),
         }
-        
-        # Always include Batfish configuration (internal service)
-        config["batfish"] = self._get_batfish_config_internal(config_data.get("batfish_setting"))
-        
-        # Always include drivers configuration (with defaults)
-        config["drivers"] = self._get_drivers_config(config_data.get("drivers", {}))
         
         # Add optional user-configurable sections if provided
         if "adapters" in config_data:
             config["adapters"] = self._get_adapters_config(config_data["adapters"])
         
-        # Create temporary file
-        temp_file = tempfile.NamedTemporaryFile(
-            mode='w', 
-            suffix='.toml', 
-            prefix=f'ni-{self.site_code}-',
-            delete=False
-        )
-        
-        toml.dump(config, temp_file)
-        temp_file.flush()
-        
-        return Path(temp_file.name)
+        return config
     
     def _get_main_config(self, main_data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -243,7 +210,6 @@ class NetworkImporterConfigGenerator:
                 "banner_timeout": network_data["netmiko_extras"].get("banner_timeout", 5),
                 "conn_timeout": network_data["netmiko_extras"].get("conn_timeout", 5),
                 "session_timeout": network_data["netmiko_extras"].get("session_timeout", 60),
-                "keepalive": network_data["netmiko_extras"].get("keepalive", 30)
             }
         
         return config
@@ -316,10 +282,8 @@ class NetworkImporterConfigGenerator:
         """
         try:
             if batfish_setting_name:
-                # Use specified batfish setting
                 batfish_settings = get_object_or_404(BatfishServiceSetting, name=batfish_setting_name)
             else:
-                # Use first available batfish setting
                 batfish_settings = BatfishServiceSetting.objects.first()
                 if not batfish_settings:
                     raise ValidationError("No BatfishServiceSetting found in database")
@@ -364,128 +328,13 @@ class NetworkImporterConfigGenerator:
         """
         config = {}
         
-        # Start with default mappings
-        config["mapping"] = self.DEFAULT_DRIVER_MAPPINGS.copy()
+        config["mapping"] = DEFAULT_DRIVERS_MAPPING
         
-        # Override with user-provided mappings if present
         if "mapping" in drivers_data:
             config["mapping"].update(drivers_data["mapping"])
         
         return config
-    
-    def validate_config(self, config_data: dict[str, Any]) -> dict[str, Any]:
-        """
-        Enhanced validation of user-provided configuration data.
-        
-        Args:
-            config_data: Configuration dictionary to validate
-            
-        Returns:
-            Dictionary containing:
-            - is_valid: Boolean indicating if config is valid
-            - errors: List of validation errors
-            - warnings: List of validation warnings
-            - referenced_models: Dict of referenced model instances
-        """
-        errors = []
-        warnings = []
-        referenced_models = {}
-        
-        # Validate main section
-        main_section = config_data.get("main", {})
-        
-        # Required backend field
-        if "backend" not in main_section:
-            errors.append("Missing required field: main.backend")
-        else:
-            valid_backends = ["nautobot", "netbox", "device42", "phpipam"]
-            if main_section["backend"] not in valid_backends:
-                errors.append(f"Invalid backend '{main_section['backend']}'. Must be one of: {valid_backends}")
-        
-        # Validate inventory settings reference
-        inventory_section = config_data.get("inventory", {})
-        if "settings_name" in inventory_section:
-            try:
-                inventory_settings = NetworkImporterInventorySettings.objects.get(
-                    name=inventory_section["settings_name"]
-                )
-                # Validate token access
-                _ = inventory_settings.token
-                referenced_models["inventory_settings"] = inventory_settings
-            except NetworkImporterInventorySettings.DoesNotExist:
-                errors.append(f"Inventory settings '{inventory_section['settings_name']}' not found")
-            except ValidationError as e:
-                errors.append(f"Inventory settings validation error: {str(e)}")
-        else:
-            errors.append("Missing required field: inventory.settings_name")
-        
-        # Validate network credentials reference
-        network_section = config_data.get("network", {})
-        if "credentials_name" in network_section:
-            try:
-                net_creds = NetworkImporterNetCreds.objects.get(
-                    name=network_section["credentials_name"]
-                )
-                # Validate credentials access
-                _ = net_creds.login
-                _ = net_creds.password
-                referenced_models["network_credentials"] = net_creds
-            except NetworkImporterNetCreds.DoesNotExist:
-                errors.append(f"Network credentials '{network_section['credentials_name']}' not found")
-            except ValidationError as e:
-                errors.append(f"Network credentials validation error: {str(e)}")
-        else:
-            errors.append("Missing required field: network.credentials_name")
-        
-        # Validate Batfish service reference
-        batfish_setting_name = config_data.get("batfish_setting")
-        try:
-            if batfish_setting_name:
-                batfish_settings = BatfishServiceSetting.objects.get(name=batfish_setting_name)
-                referenced_models["batfish_service"] = batfish_settings
-            else:
-                batfish_settings = BatfishServiceSetting.objects.first()
-                if not batfish_settings:
-                    errors.append("No BatfishServiceSetting found in database")
-                else:
-                    referenced_models["batfish_service"] = batfish_settings
-        except BatfishServiceSetting.DoesNotExist:
-            errors.append(f"Batfish service '{batfish_setting_name}' not found")
-        
-        # Validate numeric fields with sensible ranges
-        numeric_validations = {
-            "main.nbr_workers": (1, 50),
-            "logs.backup_count": (1, 20),
-            "network.netmiko_extras.global_delay_factor": (1, 100),
-            "network.netmiko_extras.banner_timeout": (1, 300),
-            "network.netmiko_extras.conn_timeout": (1, 300)
-        }
-        
-        for field_path, (min_val, max_val) in numeric_validations.items():
-            value = self._get_nested_value(config_data, field_path)
-            if value is not None:
-                try:
-                    num_value = int(value)
-                    if not (min_val <= num_value <= max_val):
-                        warnings.append(f"Field '{field_path}' value {num_value} is outside recommended range {min_val}-{max_val}")
-                except (ValueError, TypeError):
-                    errors.append(f"Field '{field_path}' must be a valid integer")
-        
-        # Validate supported platforms
-        supported_platforms = config_data.get("inventory", {}).get("supported_platforms", [])
-        valid_platforms = ["cisco_ios", "cisco_asa", "cisco_nxos", "cisco_xr", "juniper_junos", "arista_eos"]
-        if supported_platforms:
-            invalid_platforms = [p for p in supported_platforms if p not in valid_platforms]
-            if invalid_platforms:
-                warnings.append(f"Unknown platforms: {invalid_platforms}. Valid platforms: {valid_platforms}")
-        
-        return {
-            "is_valid": len(errors) == 0,
-            "errors": errors,
-            "warnings": warnings,
-            "referenced_models": referenced_models
-        }
-    
+
     def _get_nested_value(self, data: dict[str, Any], path: str) -> Any:
         """
         Get nested dictionary value using dot notation.
