@@ -35,10 +35,6 @@ class NetworkImporterConfigGenerator:
                 "banner_timeout": 5
             }
         },
-        "logs": {
-            "level": "info",
-            "performance_log": True
-        },
         "adapters": {
             "network_class": "custom.NetworkAdapter",
             "sot_class": "custom.NautobotAdapter"
@@ -53,6 +49,7 @@ class NetworkImporterConfigGenerator:
     
     Note: Batfish configuration is automatically resolved from BatfishServiceSetting model.
     If "batfish_setting" is not provided, uses the first available BatfishServiceSetting.
+    User log configs are completely ignored - NI-REST controls logging entirely.
     """
 
     def __init__(self, site_code: str):
@@ -69,6 +66,9 @@ class NetworkImporterConfigGenerator:
         This method builds the full configuration structure that would normally
         be written to a TOML file, but returns it as a Python dictionary instead.
         
+        NO logs section is included - NI-REST controls logging entirely through
+        the DatabaseLogHandler system.
+        
         Args:
             config_data: Dictionary containing user-provided network-importer configuration
             
@@ -80,12 +80,11 @@ class NetworkImporterConfigGenerator:
             ValidationError: If referenced models don't exist or have invalid env vars
         """
         
-        # Base configuration structure with comprehensive sections
+        # Base configuration structure - NO LOGS SECTION!
         config = {
             "main": self._get_main_config(config_data.get("main", {})),
             "inventory": self._get_inventory_config(config_data.get("inventory", {})),
             "network": self._get_network_config(config_data.get("network", {})),
-            "logs": self._get_logs_config(config_data.get("logs", {})),
             "batfish": self._get_batfish_config_internal(config_data.get("batfish_setting")),
             "drivers": self._get_drivers_config(config_data.get("drivers", {})),
         }
@@ -214,25 +213,6 @@ class NetworkImporterConfigGenerator:
         
         return config
     
-    def _get_logs_config(self, logs_data: dict[str, Any]) -> dict[str, Any]:
-        """
-        Get logs configuration with defaults.
-        
-        Args:
-            logs_data: Logs section configuration data
-            
-        Returns:
-            Dictionary with logs configuration including defaults
-        """
-        return {
-            "level": logs_data.get("level", "info"),
-            "performance_log": logs_data.get("performance_log", False),
-            "file": logs_data.get("file", f"/tmp/ni-{self.site_code}.log"),
-            "format": logs_data.get("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
-            "max_file_size": logs_data.get("max_file_size", "10MB"),
-            "backup_count": logs_data.get("backup_count", 5)
-        }
-    
     def _get_adapters_config(self, adapters_data: dict[str, Any]) -> dict[str, Any]:
         """
         Get adapters configuration.
@@ -328,31 +308,9 @@ class NetworkImporterConfigGenerator:
         """
         config = {}
         
-        config["mapping"] = DEFAULT_DRIVERS_MAPPING
+        config["mapping"] = DEFAULT_DRIVERS_MAPPING.copy()
         
         if "mapping" in drivers_data:
             config["mapping"].update(drivers_data["mapping"])
         
         return config
-
-    def _get_nested_value(self, data: dict[str, Any], path: str) -> Any:
-        """
-        Get nested dictionary value using dot notation.
-        
-        Args:
-            data: Dictionary to search
-            path: Dot-separated path (e.g., "main.nbr_workers")
-            
-        Returns:
-            Value at the specified path, or None if not found
-        """
-        keys = path.split('.')
-        current = data
-        
-        for key in keys:
-            if isinstance(current, dict) and key in current:
-                current = current[key]
-            else:
-                return None
-        
-        return current
