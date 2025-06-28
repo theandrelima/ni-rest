@@ -49,7 +49,7 @@ class NetworkImporterJob(models.Model):
         return self.logs.filter(level__in=['ERROR', 'CRITICAL']).exists()
     
     def __str__(self):
-        return f"{self.command} job for {self.site_code} - {self.status}"
+        return f"{self.mode} job for {self.site_code} - {self.status}"
 
 class JobLog(models.Model):
     LOG_LEVEL_CHOICES = [

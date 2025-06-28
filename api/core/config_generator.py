@@ -25,7 +25,7 @@ class NetworkImporterConfigGenerator:
         },
         "inventory": {
             "supported_platforms": ["cisco_ios", "cisco_asa"],
-            "settings_name": "production_nautobot"  # References NetworkImporterInventorySettings
+            "name": "production_nautobot"  # References NetworkImporterInventorySettings (changed from settings_name)
         },
         "network": {
             "fqdns": ["example.com"],
@@ -44,11 +44,11 @@ class NetworkImporterConfigGenerator:
                 "cisco_ios": "custom.cisco_ios_driver"
             }
         },
-        "batfish_setting": "production"  # Optional: References BatfishServiceSetting by name
+        "batfish": "production"  # Optional: References BatfishServiceSetting by name
     }
     
     Note: Batfish configuration is automatically resolved from BatfishServiceSetting model.
-    If "batfish_setting" is not provided, uses the first available BatfishServiceSetting.
+    If "batfish" is not provided, uses the first available BatfishServiceSetting.
     User log configs are completely ignored - NI-REST controls logging entirely.
     """
 
@@ -85,7 +85,7 @@ class NetworkImporterConfigGenerator:
             "main": self._get_main_config(config_data.get("main", {})),
             "inventory": self._get_inventory_config(config_data.get("inventory", {})),
             "network": self._get_network_config(config_data.get("network", {})),
-            "batfish": self._get_batfish_config_internal(config_data.get("batfish_setting")),
+            "batfish": self._get_batfish_config_internal(config_data.get("batfish")),
             "drivers": self._get_drivers_config(config_data.get("drivers", {})),
         }
         
@@ -121,13 +121,13 @@ class NetworkImporterConfigGenerator:
         
         Args:
             inventory_data: Inventory section configuration data
-                          Must contain 'settings_name' referencing a NetworkImporterInventorySettings
+                          Must contain 'name' referencing a NetworkImporterInventorySettings
             
         Returns:
             Dictionary with inventory configuration and resolved credentials
             
         Raises:
-            ValidationError: If settings_name is missing or invalid
+            ValidationError: If name is missing or invalid
         """
         config = {}
         
@@ -138,14 +138,14 @@ class NetworkImporterConfigGenerator:
             config["supported_platforms"] = ["cisco_ios", "cisco_asa", "cisco_nxos", "juniper_junos", "arista_eos"]
         
         # Get settings from model
-        settings_name = inventory_data.get("settings_name")
-        if not settings_name:
-            raise ValidationError("inventory.settings_name is required")
+        inventory_name = inventory_data.get("name")
+        if not inventory_name:
+            raise ValidationError("inventory.name is required")
         
         try:
-            inventory_settings = get_object_or_404(NetworkImporterInventorySettings, name=settings_name)
+            inventory_settings = get_object_or_404(NetworkImporterInventorySettings, name=inventory_name)
         except Exception as e:
-            raise ValidationError(f"Invalid inventory settings_name '{settings_name}': {str(e)}")
+            raise ValidationError(f"Invalid inventory name '{inventory_name}': {str(e)}")
         
         # Build settings configuration
         try:
@@ -158,7 +158,7 @@ class NetworkImporterConfigGenerator:
                 "max_workers": inventory_data.get("max_workers", 10)
             }
         except ValidationError as e:
-            raise ValidationError(f"Error accessing inventory settings for '{settings_name}': {str(e)}")
+            raise ValidationError(f"Error accessing inventory settings for '{inventory_name}': {str(e)}")
         
         return config
     
