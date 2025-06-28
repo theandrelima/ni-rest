@@ -14,7 +14,7 @@ class NetworkImporterJob(models.Model):
         ('failed', 'Failed'),
     ]
     
-    COMMAND_CHOICES = [
+    MODE_CHOICES = [
         ('apply', 'Apply'),
         ('check', 'Check'),
     ]
@@ -22,10 +22,9 @@ class NetworkImporterJob(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     site_code = models.CharField(max_length=50)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    command = models.CharField(max_length=10, choices=COMMAND_CHOICES)
+    mode = models.CharField(max_length=10, choices=MODE_CHOICES)
     status = models.CharField(max_length=20, choices=JOB_STATUS_CHOICES, default='pending')
     config_data = models.JSONField()
-    command_executed = models.TextField(blank=True)  # Audit trail
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
