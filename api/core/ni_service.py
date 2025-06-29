@@ -24,7 +24,6 @@ class NetworkImporterService:
         self.job.status = 'running'
         self.job.started_at = timezone.now()
         mode = 'check' if check else 'apply'
-        self.job.command_executed = f"Python NetworkImporter.{mode}() for site {self.job.site_code}"
         self.job.save()
         
         self.logger.info(f"Starting network import ({mode} mode) for site: {self.job.site_code}")
