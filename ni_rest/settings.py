@@ -11,19 +11,43 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load .env file FIRST, before any variable definitions
+DJANGO_ENV = os.getenv('DJANGO_ENV', 'development')
+if DJANGO_ENV == 'development':
+    try:
+        from dotenv import load_dotenv
+        env_file = BASE_DIR / '.env'
+        if env_file.exists():
+            load_dotenv(env_file)
+            # Only print once during first import
+            if not os.getenv('_DJANGO_SETTINGS_LOADED'):
+                print(f"🔧 Development: Loaded {env_file}")
+                os.environ['_DJANGO_SETTINGS_LOADED'] = 'true'
+        else:
+            if not os.getenv('_DJANGO_SETTINGS_LOADED'):
+                print("⚠️  No .env file found in development mode")
+                os.environ['_DJANGO_SETTINGS_LOADED'] = 'true'
+    except ImportError:
+        if not os.getenv('_DJANGO_SETTINGS_LOADED'):
+            print("⚠️  python-dotenv not installed")
+            os.environ['_DJANGO_SETTINGS_LOADED'] = 'true'
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+# NOW define variables (after .env is loaded)
+DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-hkc-v33dczt1s-cl&7$e@=49*1^ygzz0nk_2x^+obf74c#l_ji')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-hkc-v33dczt1s-cl&7$e@=49*1^ygzz0nk_2x^+obf74c#l_ji'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Only print mode once
+if not os.getenv('_DJANGO_MODE_PRINTED'):
+    if not DEBUG:
+        print(f"🚀 Running in Production mode")
+    else:
+        print(f"🔧 Runnin in Development mode")
+    os.environ['_DJANGO_MODE_PRINTED'] = 'true'
 
 ALLOWED_HOSTS = []
 
