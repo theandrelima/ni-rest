@@ -1,6 +1,6 @@
 [project]
 name = "ni-rest"
-version = "0.0.1"
+version = "0.0.2"
 description = "A REST API wrapper around network-importer"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,11 +14,21 @@ dependencies = [
     "django>=5.2.3",
     "django-filter>=25.1",
     "djangorestframework>=3.16.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.12.0",
     "network-importer",
+    "rich>=14.0.0",
+    "celery>=5.3.0",
+    "redis>=5.0.0",
+    "django-celery-results>=2.5.0",
+    "drf-spectacular>=0.27.0",
 ]
 
+[project.scripts]
+ni-rest = "cli.main:app"
+
 [tool.setuptools]
-packages = ["ni_rest"]
+packages = ["ni_rest", "cli"]
 
 [tool.uv.sources]
 network-importer = { git = "https://github.com/theandrelima/network-importer.git", rev = "updating_dependencies" }

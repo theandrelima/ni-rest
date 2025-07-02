@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 class NetworkImporterJob(models.Model):
     JOB_STATUS_CHOICES = [
         ('pending', 'Pending'),
+        ('queued', 'Queued'),
         ('running', 'Running'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
@@ -25,6 +26,7 @@ class NetworkImporterJob(models.Model):
     mode = models.CharField(max_length=10, choices=MODE_CHOICES)
     status = models.CharField(max_length=20, choices=JOB_STATUS_CHOICES, default='pending')
     config_data = models.JSONField()
+    celery_task_id = models.CharField(max_length=255, blank=True, null=True, help_text="Celery task ID for tracking")
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -36,19 +38,20 @@ class NetworkImporterJob(models.Model):
         indexes = [
             models.Index(fields=['site_code', '-created_at']),
             models.Index(fields=['status']),
+            models.Index(fields=['celery_task_id']),
         ]
     
     @property
-    def success(self):
+    def success(self) -> bool:
         """Job succeeded if status is completed"""
         return self.status == 'completed'
     
     @property
-    def has_errors(self):
+    def has_errors(self) -> bool:
         """Check if job has any error-level logs"""
         return self.logs.filter(level__in=['ERROR', 'CRITICAL']).exists()
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.mode} job for {self.site_code} - {self.status}"
 
 class JobLog(models.Model):
@@ -74,7 +77,7 @@ class JobLog(models.Model):
             models.Index(fields=['level']),
         ]
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.level}: {self.message[:50]}..."
     
 
@@ -104,7 +107,7 @@ class NetworkImporterInventorySettings(models.Model):
         verbose_name = "Network Importer Inventory Setting"
         verbose_name_plural = "Network Importer Inventory Settings"
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Inventory Settings: {self.name}"
     
     @property
@@ -129,7 +132,7 @@ class NetworkImporterInventorySettings(models.Model):
         
         return token
     
-    def clean(self):
+    def clean(self) -> None:
         """Validate that the required environment variable exists"""
         super().clean()
         try:
@@ -166,7 +169,7 @@ class NetworkImporterNetCreds(models.Model):
         verbose_name = "Network Importer Network Credential"
         verbose_name_plural = "Network Importer Network Credentials"
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Network Creds: {self.name}"
     
     @property
@@ -213,7 +216,7 @@ class NetworkImporterNetCreds(models.Model):
         
         return password
     
-    def clean(self):
+    def clean(self) -> None:
         """Validate that the required environment variables exist"""
         super().clean()
         errors = {}
@@ -287,10 +290,10 @@ class BatfishServiceSetting(models.Model):
         verbose_name = "Batfish Service Setting"
         verbose_name_plural = "Batfish Service Settings"
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Batfish Service: {self.name}"
     
-    def clean(self):
+    def clean(self) -> None:
         """Validate port ranges if they are provided"""
         super().clean()
         errors = {}
@@ -307,4 +310,3 @@ class BatfishServiceSetting(models.Model):
         
         if errors:
             raise ValidationError(errors)
-

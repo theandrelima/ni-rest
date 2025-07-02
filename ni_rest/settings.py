@@ -46,7 +46,7 @@ if not os.getenv('_DJANGO_MODE_PRINTED'):
     if not DEBUG:
         print(f"🚀 Running in Production mode")
     else:
-        print(f"🔧 Runnin in Development mode")
+        print(f"🔧 Running in Development mode")
     os.environ['_DJANGO_MODE_PRINTED'] = 'true'
 
 ALLOWED_HOSTS = []
@@ -64,6 +64,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'django_filters',
+    'django_celery_results',
+    'drf_spectacular',
     'api',
 ]
 
@@ -79,10 +81,44 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # Network Importer Configuration
 NETWORK_IMPORTER_TIMEOUT = 300  # 5 minutes
+
+# Celery Configuration with graceful fallback
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'django-db')
+CELERY_CACHE_BACKEND = 'django-cache'
+
+# Task configuration
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
+
+# Graceful fallback settings
+CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'False').lower() == 'true'
+CELERY_TASK_EAGER_PROPAGATES = True  # Propagate exceptions in eager mode
+
+# Task routing
+CELERY_TASK_ROUTES = {
+    'api.tasks.execute_network_import_task': {'queue': 'network_import'},
+    'api.tasks.cleanup_old_jobs_task': {'queue': 'maintenance'},
+}
+
+# Worker configuration for when they're available
+CELERY_WORKER_CONCURRENCY = int(os.getenv('CELERY_WORKER_CONCURRENCY', '4'))
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 50
+
+# Connection retry settings
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_RETRY = True
+CELERY_BROKER_CONNECTION_MAX_RETRIES = 3
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -111,19 +147,50 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'ni_rest.wsgi.application'  # ← Fixed: ni_rest not config
+WSGI_APPLICATION = 'ni_rest.wsgi.application'
 
-
-# Database
+# Database configuration with optional DATABASE_URL support
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+DATABASE_URL = os.getenv('DATABASE_URL')
 
+if DATABASE_URL:
+    # Parse DATABASE_URL manually for common cases
+    if DATABASE_URL.startswith('sqlite://'):
+        db_path = DATABASE_URL.replace('sqlite://', '')
+        if not db_path.startswith('/'):
+            db_path = BASE_DIR / db_path
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': db_path,
+            }
+        }
+    elif DATABASE_URL.startswith('postgresql://'):
+        # For production, users can install psycopg2 and set full DATABASE dict
+        # This is a simple fallback - for complex cases, they can override DATABASES
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': 'postgres',  # Will need proper parsing for production
+            }
+        }
+    else:
+        # Fallback to SQLite for any unrecognized DATABASE_URL
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+else:
+    # Default SQLite configuration
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -143,7 +210,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
@@ -155,7 +221,6 @@ USE_I18N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
@@ -165,3 +230,19 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Add Spectacular settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'NI-REST API',
+    'DESCRIPTION': 'REST API wrapper for network-importer with job tracking and async execution',
+    'VERSION': '0.0.2',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'SERVE_AUTHENTICATION': ['rest_framework.authentication.TokenAuthentication'],
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'displayOperationId': True,
+    },
+}
