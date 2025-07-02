@@ -7,10 +7,18 @@ requires-python = ">=3.11"
 authors = [
     {name = "André Lima", email = "andre@netcube.consulting"}
 ]
-license-expression = "Apache-2.0"
+
+license = "Apache-2.0"
+
 dependencies = [
+    "django>=5.2.3",
+    "django-filter>=25.1",
+    "djangorestframework>=3.16.0",
     "network-importer",
 ]
+
+[tool.setuptools]
+packages = ["ni_rest"]
 
 [tool.uv.sources]
 network-importer = { git = "https://github.com/theandrelima/network-importer.git", rev = "updating_dependencies" }
