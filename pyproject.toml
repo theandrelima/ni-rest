@@ -1,6 +1,6 @@
 [project]
 name = "network-importer-rest"
-version = "0.0.2"
+version = "0.0.3"
 description = "A REST API wrapper around network-importer"
 readme = "README.md"
 requires-python = ">=3.11"
