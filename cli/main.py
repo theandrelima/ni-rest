@@ -7,9 +7,7 @@ This CLI starts the Django server which automatically detects worker availabilit
 
 import os
 import sys
-import subprocess
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -24,18 +22,53 @@ app = typer.Typer(
 
 console = Console()
 
-def get_project_root() -> Path:
-    """Find the project root directory containing manage.py"""
-    current = Path(__file__).resolve()
-    
-    # Look for manage.py in current directory and parents
-    for path in [current.parent] + list(current.parents):
-        manage_py = path / "manage.py"
-        if manage_py.exists():
-            return path
-    
-    # Fallback: assume we're in cli package, go up one level
-    return current.parent.parent
+def setup_django_environment():
+    """Setup Django environment for direct management command execution"""
+    try:
+        import ni_rest
+        ni_rest_path = Path(ni_rest.__file__).parent
+        
+        # Add the parent directory to Python path so Django can find the modules
+        python_path = str(ni_rest_path.parent)
+        if python_path not in sys.path:
+            sys.path.insert(0, python_path)
+        
+        # Set Django settings module
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ni_rest.settings')
+        
+        # Configure Django
+        import django
+        django.setup()
+        
+        return True
+    except ImportError as e:
+        console.print(f"❌ Failed to import Django modules: {e}", style="red")
+        return False
+    except Exception as e:
+        console.print(f"❌ Failed to setup Django: {e}", style="red")
+        return False
+
+def run_django_command(command: str, *args) -> bool:
+    """Run a Django management command directly"""
+    try:
+        if not setup_django_environment():
+            return False
+            
+        from django.core.management import execute_from_command_line
+        
+        # Build command line arguments
+        argv = ['manage.py', command] + list(args)
+        
+        # Execute the command
+        execute_from_command_line(argv)
+        return True
+        
+    except SystemExit as e:
+        # Django commands often call sys.exit(), which is normal
+        return e.code == 0
+    except Exception as e:
+        console.print(f"❌ Command failed: {e}", style="red")
+        return False
 
 def validate_environment(dev_mode: bool = False) -> bool:
     """
@@ -112,12 +145,38 @@ def set_environment_for_mode(dev_mode: bool) -> None:
         os.environ['DJANGO_DEBUG'] = 'False'
         console.print("🚀 Environment configured for production mode", style="green")
         console.print("   (CLI overrides any existing DJANGO_ENV/DJANGO_DEBUG)", style="dim")
+
+def check_celery_workers() -> bool:
+    """Check if Celery workers are available"""
+    try:
+        # Try to import celery and check broker connection
+        from celery import Celery
         
-        # Warn if .env file exists in production mode
-        project_root = get_project_root()
-        env_file = project_root / '.env'
-        if env_file.exists():
-            console.print("⚠️  .env file found but ignored in production mode", style="yellow")
+        # Get broker URL from environment
+        broker_url = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+        
+        # Create temporary Celery app to check connection
+        app = Celery('ni_rest_check')
+        app.config_from_object('ni_rest.celery')
+        
+        # Try to inspect active workers
+        inspect = app.control.inspect()
+        active_workers = inspect.active()
+        
+        if active_workers:
+            console.print("✅ Celery workers are available (async execution)", style="green")
+            console.print(f"Active workers: {list(active_workers.keys())}", style="dim")
+            return True
+        else:
+            console.print("ℹ️  No dedicated Celery workers (immediate execution mode)", style="blue")
+            return False
+            
+    except ImportError:
+        console.print("ℹ️  Celery not available (immediate execution mode)", style="blue")
+        return False
+    except Exception as e:
+        console.print("ℹ️  Celery not configured (immediate execution mode)", style="blue")
+        return False
 
 @app.command()
 def start(
@@ -173,22 +232,7 @@ def start(
         console.print("Fix the issues above and try again", style="dim")
         raise typer.Exit(1)
     
-    # Get project root
-    project_root = get_project_root()
-    manage_py = project_root / "manage.py"
-    
-    if not manage_py.exists():
-        console.print(f"❌ manage.py not found in {project_root}", style="red")
-        raise typer.Exit(1)
-    
-    console.print(f"📁 Project root: {project_root}", style="dim")
-    
-    # Prepare Django command
-    cmd = [sys.executable, "manage.py", "runserver", f"{host}:{port}"]
-    if not dev:
-        cmd.append("--noreload")  # Disable auto-reload in production
-    
-        # Show final startup info
+    # Show final startup info
     console.print(f"\n📡 Server will be available at: http://{host}:{port}/", style="bold")
     console.print(f"👨‍💻 Admin interface: http://{host}:{port}/admin/", style="dim")
     console.print(f"🤖 API endpoints: http://{host}:{port}/api/", style="dim")
@@ -200,12 +244,14 @@ def start(
     
     console.print("\n🏁 Starting server...\n", style="bold green")
     
+    # Start the Django development server directly
     try:
-        # Change to project directory and run command
-        subprocess.run(cmd, cwd=project_root, check=True)
+        if not run_django_command("runserver", f"{host}:{port}"):
+            console.print("❌ Failed to start server", style="red")
+            raise typer.Exit(1)
     except KeyboardInterrupt:
         console.print("\n\n⏹️  Server stopped by user", style="yellow")
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         console.print(f"\n❌ Server failed to start: {e}", style="red")
         raise typer.Exit(1)
 
@@ -213,46 +259,20 @@ def start(
 def status():
     """Show status of the application and any available workers."""
     
-    project_root = get_project_root()
-    
     console.print(Panel.fit(
         "[bold]NI-REST Application Status[/bold]",
         title="🚥 Status Check",
         border_style="blue"
     ))
     
-    # Check if we can import Django (server is configured)
-    try:
-        cmd = [sys.executable, "manage.py", "check"]
-        result = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)
-        if result.returncode == 0:
-            console.print("✅ Django application configuration is valid", style="green")
-        else:
-            console.print("❌ Django application has configuration issues", style="red")
-            if result.stderr:
-                console.print(f"Error details: {result.stderr}", style="dim")
-            if result.stdout:
-                console.print(f"Output: {result.stdout}", style="dim")
-    except Exception as e:
-        console.print(f"❌ Error checking Django: {e}", style="red")
+    # Check Django application
+    if run_django_command("check"):
+        console.print("✅ Django application configuration is valid", style="green")
+    else:
+        console.print("❌ Django application has configuration issues", style="red")
     
-    # Check worker status (optional)
-    try:
-        cmd = ["celery", "-A", "ni_rest", "inspect", "active"]
-        result = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True, timeout=5)
-        if result.returncode == 0 and "ERROR" not in result.stderr:
-            console.print("✅ Celery workers are available (async execution)", style="green")
-            if result.stdout.strip():
-                console.print("Worker details:", style="dim")
-                console.print(result.stdout, style="dim")
-        else:
-            console.print("ℹ️  No dedicated Celery workers (immediate execution mode)", style="blue")
-    except subprocess.TimeoutExpired:
-        console.print("ℹ️  No Celery broker connection (immediate execution mode)", style="blue")
-    except FileNotFoundError:
-        console.print("ℹ️  Celery not available (immediate execution mode)", style="blue")
-    except Exception as e:
-        console.print("ℹ️  Celery not configured (immediate execution mode)", style="blue")
+    # Check worker status
+    check_celery_workers()
 
 @app.command()
 def check_env():
@@ -301,7 +321,7 @@ def check_env():
 @app.command()
 def manage(
     command: str = typer.Argument(..., help="Django management command to run"),
-    args: Optional[list[str]] = typer.Argument(None, help="Additional arguments")
+    args: list[str] | None = typer.Argument(None, help="Additional arguments")
 ):
     """
     Run Django management commands.
@@ -312,24 +332,16 @@ def manage(
         ni-rest manage collectstatic
         ni-rest manage shell
     """
-    project_root = get_project_root()
-    manage_py = project_root / "manage.py"
     
-    if not manage_py.exists():
-        console.print(f"❌ manage.py not found in {project_root}", style="red")
-        raise typer.Exit(1)
-    
-    # Build command
-    cmd = [sys.executable, "manage.py", command]
+    # Build command arguments
+    cmd_args = [command]
     if args:
-        cmd.extend(args)
+        cmd_args.extend(args)
     
-    console.print(f"🔧 Running: {' '.join(cmd)}", style="blue")
+    console.print(f"🔧 Running: manage.py {' '.join(cmd_args)}", style="blue")
     
-    try:
-        subprocess.run(cmd, cwd=project_root, check=True)
-    except subprocess.CalledProcessError as e:
-        console.print(f"❌ Command failed: {e}", style="red")
+    if not run_django_command(*cmd_args):
+        console.print("❌ Command failed", style="red")
         raise typer.Exit(1)
 
 if __name__ == "__main__":
