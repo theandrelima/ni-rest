@@ -8,7 +8,8 @@ authors = [
     {name = "André Lima", email = "andre@netcube.consulting"}
 ]
 
-license = "Apache-2.0"
+license = { text = "Apache-2.0" }
+license-files = ["LICENSE"]
 
 dependencies = [
     "django>=5.2.3",
