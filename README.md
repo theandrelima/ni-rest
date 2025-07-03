@@ -22,29 +22,58 @@ The service automatically detects if Celery workers are available:
 ### Prerequisites
 
 - Python 3.11 or higher
-- [uv](https://docs.astral.sh/uv/) package manager (recommended) or pip
 - Redis server (optional, for Celery workers)
 
 ### Install from PyPI
 
-```bash
-# Install with uv (recommended)
-uv pip install network-importer-rest
+The package is available on PyPI and can be installed with your preferred Python package manager:
 
-# Or install with pip
+```bash
+# Install with pip
 pip install network-importer-rest
+
+# Or install with poetry
+poetry add network-importer-rest
+
+# Or install with uv
+uv pip install network-importer-rest
 ```
 
 ### Install from Source
 
-```bash
-# Install directly from GitHub
-uv pip install git+https://github.com/theandrelima/ni-rest.git
+This project is managed with [uv](https://docs.astral.sh/uv/) for dependency management and packaging.
 
-# Or install in development mode for local development
+#### Quick Install from GitHub
+
+```bash
+# Install directly from GitHub with pip
+pip install git+https://github.com/theandrelima/ni-rest.git
+
+# Or with uv
+uv pip install git+https://github.com/theandrelima/ni-rest.git
+```
+
+#### Development Setup with uv
+
+For local development and contributing:
+
+```bash
+# Clone the repository
 git clone https://github.com/theandrelima/ni-rest.git
 cd ni-rest
+
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# or: pip install uv
+
+# Create virtual environment and install dependencies
 uv sync
+
+# Activate the virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Verify installation
+ni-rest --help
 ```
 
 ### Verify Installation
