@@ -1,5 +1,5 @@
 [project]
-name = "nirest"
+name = "network-importer-rest"
 version = "0.0.2"
 description = "A REST API wrapper around network-importer"
 readme = "README.md"

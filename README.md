@@ -19,15 +19,23 @@ The service automatically detects if Celery workers are available:
 
 ## Installation
 
-Since NI-REST is not yet published to PyPI, install it directly from the Git repository using [uv](https://docs.astral.sh/uv/):
-
 ### Prerequisites
 
 - Python 3.11 or higher
-- [uv](https://docs.astral.sh/uv/) package manager
+- [uv](https://docs.astral.sh/uv/) package manager (recommended) or pip
 - Redis server (optional, for Celery workers)
 
-### Install with uv
+### Install from PyPI
+
+```bash
+# Install with uv (recommended)
+uv pip install network-importer-rest
+
+# Or install with pip
+pip install network-importer-rest
+```
+
+### Install from Source
 
 ```bash
 # Install directly from GitHub
@@ -283,3 +291,17 @@ curl -H "Authorization: Token your-api-token" \
 curl -H "Authorization: Token your-api-token" \
   http://localhost:8000/api/jobs/{job-id}/logs/
 ```
+
+## Key Features Summary
+
+- **🔧 Developer-friendly**: Development mode with automatic `.env` loading
+- **🚀 Production-ready**: Production mode ignores `.env` files for security
+- **⚡ Flexible execution**: Works with or without Celery workers
+- **📚 Interactive docs**: Swagger UI and ReDoc for API exploration
+- **🎯 Container-ready**: Designed for Docker and Kubernetes deployments
+- **🔄 Auto-detection**: Automatically detects worker availability
+- **📊 Job tracking**: Comprehensive status monitoring and logging
+
+## License
+
+Apache-2.0
