@@ -14,7 +14,7 @@ from pathlib import Path
 import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Load .env file FIRST, before any variable definitions
 DJANGO_ENV = os.getenv('DJANGO_ENV', 'development')
@@ -24,30 +24,12 @@ if DJANGO_ENV == 'development':
         env_file = BASE_DIR / '.env'
         if env_file.exists():
             load_dotenv(env_file)
-            # Only print once during first import
-            if not os.getenv('_DJANGO_SETTINGS_LOADED'):
-                print(f"🔧 Development: Loaded {env_file}")
-                os.environ['_DJANGO_SETTINGS_LOADED'] = 'true'
-        else:
-            if not os.getenv('_DJANGO_SETTINGS_LOADED'):
-                print("⚠️  No .env file found in development mode")
-                os.environ['_DJANGO_SETTINGS_LOADED'] = 'true'
     except ImportError:
-        if not os.getenv('_DJANGO_SETTINGS_LOADED'):
-            print("⚠️  python-dotenv not installed")
-            os.environ['_DJANGO_SETTINGS_LOADED'] = 'true'
+        pass
 
 # NOW define variables (after .env is loaded)
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-hkc-v33dczt1s-cl&7$e@=49*1^ygzz0nk_2x^+obf74c#l_ji')
-
-# Only print mode once
-if not os.getenv('_DJANGO_MODE_PRINTED'):
-    if not DEBUG:
-        print(f"🚀 Running in Production mode")
-    else:
-        print(f"🔧 Running in Development mode")
-    os.environ['_DJANGO_MODE_PRINTED'] = 'true'
 
 ALLOWED_HOSTS = []
 
@@ -66,7 +48,7 @@ INSTALLED_APPS = [
     'django_filters',
     'django_celery_results',
     'drf_spectacular',
-    'api',
+    'ni_rest.api',  # Updated path to API app
 ]
 
 # REST Framework Configuration
@@ -105,8 +87,8 @@ CELERY_TASK_EAGER_PROPAGATES = True  # Propagate exceptions in eager mode
 
 # Task routing
 CELERY_TASK_ROUTES = {
-    'api.tasks.execute_network_import_task': {'queue': 'network_import'},
-    'api.tasks.cleanup_old_jobs_task': {'queue': 'maintenance'},
+    'ni_rest.api.tasks.execute_network_import_task': {'queue': 'network_import'},
+    'ni_rest.api.tasks.cleanup_old_jobs_task': {'queue': 'maintenance'},
 }
 
 # Worker configuration for when they're available
@@ -130,7 +112,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'ni_rest.urls'
+# Updated path to URLs
+ROOT_URLCONF = 'ni_rest.core.urls'
 
 TEMPLATES = [
     {
@@ -147,7 +130,8 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'ni_rest.wsgi.application'
+# Updated path to WSGI application
+WSGI_APPLICATION = 'ni_rest.core.wsgi.application'
 
 # Database configuration with optional DATABASE_URL support
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
