@@ -28,10 +28,13 @@ def setup_django_environment():
         import ni_rest
         ni_rest_path = Path(ni_rest.__file__).parent
         
-        # Add the parent directory to Python path so Django can find the modules
-        python_path = str(ni_rest_path.parent)
-        if python_path not in sys.path:
-            sys.path.insert(0, python_path)
+        # When installed via pip, both ni_rest and api are in site-packages
+        # ni_rest_path.parent is the site-packages directory
+        site_packages = ni_rest_path.parent
+        
+        # Add site-packages to Python path so Django can find both ni_rest and api
+        if str(site_packages) not in sys.path:
+            sys.path.insert(0, str(site_packages))
         
         # Set Django settings module
         os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ni_rest.settings')
@@ -43,6 +46,28 @@ def setup_django_environment():
         return True
     except ImportError as e:
         console.print(f"❌ Failed to import Django modules: {e}", style="red")
+        
+        # Debug information
+        try:
+            import ni_rest
+            ni_rest_path = Path(ni_rest.__file__).parent
+            site_packages = ni_rest_path.parent
+            console.print(f"🔍 Debug info:", style="dim")
+            console.print(f"  ni_rest location: {ni_rest_path}", style="dim")
+            console.print(f"  site-packages: {site_packages}", style="dim")
+            console.print(f"  Contents: {[p.name for p in site_packages.iterdir() if p.is_dir()]}", style="dim")
+            console.print(f"  sys.path includes site-packages: {str(site_packages) in sys.path}", style="dim")
+            
+            # Try to import api directly
+            try:
+                import api
+                console.print(f"  ✅ api module found at: {api.__file__}", style="dim")
+            except ImportError as api_e:
+                console.print(f"  ❌ api module not found: {api_e}", style="dim")
+                
+        except Exception as debug_e:
+            console.print(f"  Debug failed: {debug_e}", style="dim")
+            
         return False
     except Exception as e:
         console.print(f"❌ Failed to setup Django: {e}", style="red")

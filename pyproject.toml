@@ -28,7 +28,7 @@ dependencies = [
 ni-rest = "cli.main:app"  # CLI command stays the same
 
 [tool.setuptools]
-packages = ["ni_rest", "cli"]
+packages = ["ni_rest", "cli", "api"]
 
 [tool.uv.sources]
 network-importer = { git = "https://github.com/theandrelima/network-importer.git", rev = "updating_dependencies" }
