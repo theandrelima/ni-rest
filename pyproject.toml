@@ -1,5 +1,5 @@
 [project]
-name = "ni-rest"
+name = "nirest"
 version = "0.0.2"
 description = "A REST API wrapper around network-importer"
 readme = "README.md"
@@ -25,7 +25,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ni-rest = "cli.main:app"
+ni-rest = "cli.main:app"  # CLI command stays the same
 
 [tool.setuptools]
 packages = ["ni_rest", "cli"]
