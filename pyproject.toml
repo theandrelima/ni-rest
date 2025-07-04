@@ -1,6 +1,6 @@
 [project]
 name = "network-importer-rest"
-version = "0.0.5"
+version = "0.0.6"
 description = "A REST API wrapper around network-importer"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,7 +29,7 @@ dependencies = [
 ni-rest = "cli.main:main"  # Calling main() function instead of app directly
 
 [tool.setuptools]
-packages = ["ni_rest", "ni_rest.api", "ni_rest.core", "cli"]
+packages = {find = {}}
 
 [tool.uv.sources]
 network-importer = { git = "https://github.com/theandrelima/network-importer.git", rev = "updating_dependencies" }
