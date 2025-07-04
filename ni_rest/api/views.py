@@ -165,8 +165,8 @@ class NetworkImporterExecuteView(APIView):
                 job.save()
                 
                 # Import here to avoid circular imports
-                from .core.config_generator import NetworkImporterConfigGenerator
-                from .core.ni_service import NetworkImporterService
+                from .services.config_generator import NetworkImporterConfigGenerator
+                from .services.ni_service import NetworkImporterService
                 
                 # Execute directly
                 config_gen = NetworkImporterConfigGenerator(job.site_code)
