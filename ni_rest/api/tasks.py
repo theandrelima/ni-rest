@@ -13,8 +13,8 @@ from celery import shared_task
 from celery.utils.log import get_task_logger
 
 from .models import NetworkImporterJob, JobLog
-from .core.config_generator import NetworkImporterConfigGenerator
-from .core.ni_service import NetworkImporterService
+from .services.config_generator import NetworkImporterConfigGenerator
+from .services.ni_service import NetworkImporterService
 
 # Use Celery's logger for task logging
 logger = get_task_logger(__name__)
