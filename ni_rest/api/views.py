@@ -41,7 +41,7 @@ def api_root(request):
     """Simple API root endpoint with known API endpoints."""
     
     # Get the API URL patterns specifically
-    from api.urls import urlpatterns
+    from ni_rest.api.urls import urlpatterns
     from django.urls.resolvers import URLPattern
     
     endpoints = {}

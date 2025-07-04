@@ -10,7 +10,7 @@ def root_redirect(request):
 urlpatterns = [
     path('', root_redirect),
     path('admin/', admin.site.urls),
-    path('api/', include('api.urls')),
+    path('api/', include('ni_rest.api.urls')),
     
     # OpenAPI schema and documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
