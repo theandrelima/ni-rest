@@ -16,6 +16,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from ni_rest.core.db_utils import get_database_config
+
+
 app = typer.Typer(
     name="ni-rest",
     help="Network Importer REST API - Auto-detects worker availability",
@@ -240,19 +243,29 @@ def validate_environment(dev_mode: bool = False) -> bool:
     else:
         console.print("✅ DJANGO_SECRET_KEY configured", style="green")
     
-    # Check database configuration
-    database_url = os.getenv('DATABASE_URL')
-    if database_url:
-        if database_url.startswith('sqlite://'):
-            console.print(f"💾 Database: SQLite ({database_url})", style="blue")
-        elif database_url.startswith('postgresql://'):
-            console.print(f"💾 Database: PostgreSQL", style="blue")
-        elif database_url.startswith('mysql://'):
-            console.print(f"💾 Database: MySQL", style="blue")
+    # Check database configuration by calling the same utility Django uses
+    try:
+        db_config = get_database_config()['default']
+        db_engine = db_config.get('ENGINE', '')
+        
+        if 'sqlite' in db_engine:
+            db_path = db_config.get('NAME', 'N/A')
+            console.print(f"💾 Database: SQLite at [bold cyan]{db_path}[/bold cyan]", style="blue")
+        elif 'postgresql' in db_engine:
+            db_host = db_config.get('HOST', 'unknown')
+            db_name = db_config.get('NAME', 'unknown')
+            console.print(f"💾 Database: PostgreSQL ([bold cyan]{db_name}[/bold cyan] at {db_host})", style="blue")
+        elif 'mysql' in db_engine:
+            db_host = db_config.get('HOST', 'unknown')
+            db_name = db_config.get('NAME', 'unknown')
+            console.print(f"💾 Database: MySQL ([bold cyan]{db_name}[/bold cyan] at {db_host})", style="blue")
         else:
-            console.print(f"💾 Database: Custom ({database_url.split('://')[0]})", style="blue")
-    else:
-        console.print("💾 Database: SQLite (default)", style="blue")
+            engine_name = db_engine.split('.')[-1] if db_engine else 'N/A'
+            console.print(f"💾 Database: Custom ([bold cyan]{engine_name}[/bold cyan])", style="blue")
+            
+    except Exception as e:
+        console.print(f"❌ Could not determine database configuration: {e}", style="red")
+        return False
     
     # Check for any NI credential environment variables
     ni_vars = [key for key in os.environ.keys() if key.startswith(('NI_INVENTORY_SETTING_', 'NI_NET_CREDS_'))]

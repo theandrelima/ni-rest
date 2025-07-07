@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from .db_utils import get_database_config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -136,45 +137,7 @@ WSGI_APPLICATION = 'ni_rest.core.wsgi.application'
 # Database configuration with optional DATABASE_URL support
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASE_URL = os.getenv('DATABASE_URL')
-
-if DATABASE_URL:
-    # Parse DATABASE_URL manually for common cases
-    if DATABASE_URL.startswith('sqlite://'):
-        db_path = DATABASE_URL.replace('sqlite://', '')
-        if not db_path.startswith('/'):
-            db_path = BASE_DIR / db_path
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': db_path,
-            }
-        }
-    elif DATABASE_URL.startswith('postgresql://'):
-        # For production, users can install psycopg2 and set full DATABASE dict
-        # This is a simple fallback - for complex cases, they can override DATABASES
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': 'postgres',  # Will need proper parsing for production
-            }
-        }
-    else:
-        # Fallback to SQLite for any unrecognized DATABASE_URL
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
-else:
-    # Default SQLite configuration
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+DATABASES = get_database_config()
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
