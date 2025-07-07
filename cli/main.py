@@ -598,4 +598,5 @@ def main():
     """Entry point function - only this should be called by the script entry point"""
     app()
 
-if __name__ ==
+if __name__ == "__main__":
+    main()
