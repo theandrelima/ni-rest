@@ -570,8 +570,8 @@ def check_env():
 
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def manage(
+    ctx: typer.Context,
     command: str = typer.Argument(..., help="Django management command to run"),
-    ctx: typer.Context = typer.Context
 ):
     """
     Run Django management commands.

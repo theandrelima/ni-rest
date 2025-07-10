@@ -8,6 +8,9 @@ def get_database_config() -> dict[str, dict[str, any]]:
     db_cfg = dj_database_url.config(
         default=f"sqlite:///{_get_default_sqlite_path()}"
     )
+    if isinstance(db_cfg, dict) and 'default' in db_cfg:
+        # Already a full DATABASES dict
+        return db_cfg
     return {'default': db_cfg}
 
 def _get_default_sqlite_path() -> Path:
@@ -39,4 +42,4 @@ def _get_default_sqlite_path() -> Path:
     app_data_dir = data_dir / 'ni-rest'
     app_data_dir.mkdir(parents=True, exist_ok=True)
     
-    return app_data_dir / 'db.sqlite3'
+    return app_data_dir

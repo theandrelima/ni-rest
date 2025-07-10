@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for faster dependency management
-RUN pip install --no-cache-dir uv
+# Install uv for faster dependency management (pinned version)
+RUN pip install --no-cache-dir uv==0.7.20
 
 # Copy project files
 COPY . .
@@ -26,5 +26,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 
-# Default command (can be overridden in docker-compose)
 CMD ["ni-rest", "start", "--host", "0.0.0.0", "--port", "8000"]
