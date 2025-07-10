@@ -32,8 +32,7 @@ if DJANGO_ENV == 'development':
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-hkc-v33dczt1s-cl&7$e@=49*1^ygzz0nk_2x^+obf74c#l_ji')
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', '').split(',') if h]
 
 # Application definition
 
