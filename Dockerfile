@@ -10,14 +10,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for faster dependency management (pinned version)
-RUN pip install --no-cache-dir uv==0.7.20
+# Copy dependency files first for better Docker cache
+COPY pyproject.toml uv.lock ./
 
-# Copy project files
-COPY . .
+# Install uv for faster dependency management (use latest available version)
+RUN pip install --no-cache-dir uv==0.7.20
 
 # Install the project and dependencies using uv
 RUN uv sync --frozen
+
+# Copy the rest of the project files
+COPY . .
 
 RUN uv pip install -e ".[postgres]"
 

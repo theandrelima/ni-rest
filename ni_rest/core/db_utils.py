@@ -42,4 +42,4 @@ def _get_default_sqlite_path() -> Path:
     app_data_dir = data_dir / 'ni-rest'
     app_data_dir.mkdir(parents=True, exist_ok=True)
     
-    return app_data_dir
+    return app_data_dir / 'db.sqlite3'

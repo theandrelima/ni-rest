@@ -53,9 +53,11 @@ ni-rest start
 ## Application Settings
 
 #### `DJANGO_SECRET_KEY`
--   **Required in Production**
+-   **Required in all environments except explicit development.**
 -   A long, unique, and unpredictable value used for cryptographic signing.
--   If not set in development, a temporary, insecure key will be used.
+-   If not set and `DJANGO_ENV=development`, a temporary, insecure key will be used.
+-   **If `DJANGO_ENV` is anything other than `development`, the application will refuse to start unless `DJANGO_SECRET_KEY` is set.**
+-   This philosophy ensures that only explicit development environments are allowed to use insecure defaults. All other environments are treated as production for security purposes.
 
 #### `DJANGO_DEBUG`
 -   Controls Django's debug mode.
