@@ -568,10 +568,10 @@ def check_env():
         console.print("4. Set NI_NET_CREDS_LOGIN_* and NI_NET_CREDS_PASSWORD_* variables")
         console.print("5. Configure Redis/RabbitMQ for Celery")
 
-@app.command()
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def manage(
     command: str = typer.Argument(..., help="Django management command to run"),
-    args: list[str] | None = typer.Argument(None, help="Additional arguments")
+    ctx: typer.Context = typer.Context
 ):
     """
     Run Django management commands.
@@ -579,17 +579,14 @@ def manage(
     Examples:
         ni-rest manage migrate
         ni-rest manage createsuperuser  
-        ni-rest manage collectstatic
+        ni-rest manage collectstatic --noinput
         ni-rest manage shell
     """
-    
     # Build command arguments
-    cmd_args = [command]
-    if args:
-        cmd_args.extend(args)
-    
+    cmd_args = [command] + ctx.args
+
     console.print(f"🔧 Running: manage.py {' '.join(cmd_args)}", style="blue")
-    
+
     if not run_django_command(*cmd_args):
         console.print("❌ Command failed", style="red")
         raise typer.Exit(1)

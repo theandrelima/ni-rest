@@ -5,20 +5,10 @@ from pathlib import Path
 import dj_database_url
 
 def get_database_config() -> dict[str, dict[str, any]]:
-    """
-    Get database configuration using dj-database-url for robust parsing.
-    
-    It prioritizes the DATABASE_URL environment variable. If not set, it
-    provides a sensible default SQLite database configuration.
-    
-    Returns:
-        A complete DATABASES configuration dictionary for Django settings.
-    """
-    # dj-database-url v3+ returns the full DATABASES dictionary.
-    # If DATABASE_URL is not set, it uses the `default` parameter.
-    return dj_database_url.config(
+    db_cfg = dj_database_url.config(
         default=f"sqlite:///{_get_default_sqlite_path()}"
     )
+    return {'default': db_cfg}
 
 def _get_default_sqlite_path() -> Path:
     """

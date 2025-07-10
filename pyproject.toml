@@ -26,6 +26,11 @@ dependencies = [
     "dj-database-url>=3.0.1"
 ]
 
+[project.optional-dependencies]
+postgres = [
+    "psycopg[binary]>=3.1"
+]
+
 [project.scripts]
 ni-rest = "cli.main:main"  # Calling main() function instead of app directly
 

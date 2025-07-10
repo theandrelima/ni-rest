@@ -192,3 +192,5 @@ SPECTACULAR_SETTINGS = {
         'displayOperationId': True,
     },
 }
+
+STATIC_ROOT = os.getenv("STATIC_ROOT", "/app/staticfiles")
