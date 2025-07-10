@@ -30,10 +30,16 @@ if DJANGO_ENV == 'development':
 
 # NOW define variables (after .env is loaded)
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-hkc-v33dczt1s-cl&7$e@=49*1^ygzz0nk_2x^+obf74c#l_ji')
 
-ALLOWED_HOSTS = []
+# SECURITY: Only allow insecure defaults in explicit development mode
+if DJANGO_ENV == 'development':
+    SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-hkc-v33dczt1s-cl&7$e@=49*1^ygzz0nk_2x^+obf74c#l_ji')
+else:
+    SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+    if not SECRET_KEY:
+        raise ValueError("SECRET_KEY must be set when not in development environment.")
 
+ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', '').split(',') if h]
 
 # Application definition
 
@@ -193,3 +199,5 @@ SPECTACULAR_SETTINGS = {
         'displayOperationId': True,
     },
 }
+
+STATIC_ROOT = os.getenv("STATIC_ROOT", "/app/staticfiles")
