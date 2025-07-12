@@ -5,6 +5,7 @@ from network_importer.config import load
 from network_importer.main import NetworkImporter
 from ..models import NetworkImporterJob
 from .job_logger import JobLogger
+import json
 
 class NetworkImporterService:
     """Execute network-importer with direct Python integration and database logging"""
@@ -30,6 +31,12 @@ class NetworkImporterService:
         
         try:
             self.logger.debug("Loading network-importer configuration")
+            
+            # Log the full config dict as JSON for traceability
+            self.logger.info(
+                "Final network-importer config (as used by network-importer):\n" +
+                json.dumps(self.config_dict, indent=2, sort_keys=True)
+            )
             
             # Load settings directly from our config dict
             _settings = load(config_data=self.config_dict)
