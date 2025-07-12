@@ -7,6 +7,7 @@ from ..models import (
     NetworkImporterNetCreds,
     BatfishServiceSetting
 )
+import copy
 
 class NetworkImporterConfigGenerator:
     """   
@@ -81,7 +82,7 @@ class NetworkImporterConfigGenerator:
         """
         # Start with the user-provided configuration as the base
         # This ensures all user-provided settings are preserved
-        config = config_data.copy()
+        config = copy.deepcopy(config_data)
         
         # Process required sections with special handling
         self._process_inventory_section(config)
@@ -96,9 +97,31 @@ class NetworkImporterConfigGenerator:
         if 'drivers' not in config:
             config['drivers'] = {'mapping': DEFAULT_DRIVERS_MAPPING.copy()}
         elif 'mapping' not in config['drivers']:
-            config['drivers']['mapping'] = DEFAULT_DRIVERS_MAPPING.copy()
+            config['drivers']['mapping'] = DEFAULT_DRIVERS_MAPPING.copy()}
+        
+        # Clean up internal reference fields that network-importer doesn't expect
+        self._cleanup_internal_reference_fields(config)
         
         return config
+
+    def _cleanup_internal_reference_fields(self, config: dict[str, Any]) -> None:
+        """
+        Remove internal reference fields that are not expected by network-importer.
+        
+        Args:
+            config: Configuration dictionary to clean up in place
+        """
+        # Remove inventory.name after it's been used for credential lookup
+        if 'inventory' in config and isinstance(config['inventory'], dict):
+            config['inventory'].pop('name', None)
+            
+        # Remove network.credentials_name after it's been used for credential lookup
+        if 'network' in config and isinstance(config['network'], dict):
+            config['network'].pop('credentials_name', None)
+            
+        # Remove batfish.name after it's been used for configuration lookup
+        if 'batfish' in config and isinstance(config['batfish'], dict):
+            config['batfish'].pop('name', None)
 
     def _get_default_main_config(self) -> dict[str, Any]:
         """Get default main configuration settings."""
@@ -300,4 +323,4 @@ class NetworkImporterConfigGenerator:
         if batfish_settings.use_ssl is not None:
             config["use_ssl"] = batfish_settings.use_ssl
 
-        return
+        return config

@@ -1,11 +1,12 @@
 import logging
-from typing import Any
+from typing import Any, Dict
 from django.utils import timezone
 from network_importer.config import load
 from network_importer.main import NetworkImporter
 from ..models import NetworkImporterJob
 from .job_logger import JobLogger
 import json
+import copy
 
 class NetworkImporterService:
     """Execute network-importer with direct Python integration and database logging"""
@@ -32,10 +33,13 @@ class NetworkImporterService:
         try:
             self.logger.debug("Loading network-importer configuration")
             
-            # Log the full config dict as JSON for traceability
+            # Create a sanitized copy of the config dict for logging
+            sanitized_config = self._get_sanitized_config(self.config_dict)
+            
+            # Log the sanitized config dict as JSON for traceability
             self.logger.info(
                 "Final network-importer config (as used by network-importer):\n" +
-                json.dumps(self.config_dict, indent=2, sort_keys=True)
+                json.dumps(sanitized_config, indent=2, sort_keys=True)
             )
             
             # Load settings directly from our config dict
@@ -87,6 +91,32 @@ class NetworkImporterService:
         finally:
             # Clean up logging hijack
             self._restore_original_logging()
+
+    def _get_sanitized_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a sanitized copy of the config dict with sensitive data masked.
+        
+        Args:
+            config: Original configuration dictionary
+            
+        Returns:
+            Sanitized copy with sensitive data masked
+        """
+        # Create a deep copy to avoid modifying the original
+        sanitized = copy.deepcopy(config)
+        
+        # Mask inventory token if present
+        if 'inventory' in sanitized and isinstance(sanitized['inventory'], dict):
+            if 'settings' in sanitized['inventory'] and isinstance(sanitized['inventory']['settings'], dict):
+                if 'token' in sanitized['inventory']['settings']:
+                    sanitized['inventory']['settings']['token'] = '********'
+        
+        # Mask network password if present
+        if 'network' in sanitized and isinstance(sanitized['network'], dict):
+            if 'password' in sanitized['network']:
+                sanitized['network']['password'] = '********'
+        
+        return sanitized
     
     def _execute_check(self, ni: NetworkImporter) -> dict[str, Any]:
         """Execute network-importer in check mode (calculate diffs only)"""
@@ -137,6 +167,7 @@ class NetworkImporterService:
         
         # Store original handlers for restoration
         self._original_handlers = {}
+        self._original_propagate = {}
         
         # Only hijack specific network-importer loggers, not root logger
         ni_logger_names = [
@@ -154,8 +185,9 @@ class NetworkImporterService:
         for logger_name in ni_logger_names:
             ni_logger = logging.getLogger(logger_name)
             
-            # Store original handlers
+            # Store original handlers and propagate setting
             self._original_handlers[logger_name] = ni_logger.handlers.copy()
+            self._original_propagate[logger_name] = ni_logger.propagate
             
             # Replace with our handlers
             ni_logger.handlers.clear()
@@ -163,7 +195,7 @@ class NetworkImporterService:
                 ni_logger.addHandler(handler)
             
             ni_logger.setLevel(logging.DEBUG)
-            ni_logger.propagate = False
+            ni_logger.propagate = False  # Prevent double logging
         
         self.logger.info("Network-importer logging redirected to NI-REST database")
     
@@ -179,6 +211,8 @@ class NetworkImporterService:
                 for handler in original_handlers:
                     ni_logger.addHandler(handler)
                 
-                ni_logger.propagate = True
+                # Restore original propagate setting
+                if logger_name in self._original_propagate:
+                    ni_logger.propagate = self._original_propagate[logger_name]
         
         self.logger.info("Original logging configuration restored")
