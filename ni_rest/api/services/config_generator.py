@@ -97,8 +97,8 @@ class NetworkImporterConfigGenerator:
         if 'drivers' not in config:
             config['drivers'] = {'mapping': DEFAULT_DRIVERS_MAPPING.copy()}
         elif 'mapping' not in config['drivers']:
-            config['drivers']['mapping'] = DEFAULT_DRIVERS_MAPPING.copy()}
-        
+            config['drivers']['mapping'] = DEFAULT_DRIVERS_MAPPING.copy()
+       
         # Clean up internal reference fields that network-importer doesn't expect
         self._cleanup_internal_reference_fields(config)
         
