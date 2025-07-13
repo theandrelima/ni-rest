@@ -128,8 +128,8 @@ class NetworkImporterService:
         """Execute network-importer in check mode (calculate diffs only)"""
         self.logger.info("Executing network check (diff calculation)...")
         
-        # Initialize the importer - this will log to our database
-        ni.init()
+        # Initialize the importer with site filter
+        ni.init(limit=f"site={self.job.site_code}")
         
         # Calculate diff without applying changes - this will log to our database
         diff = ni.diff()
@@ -147,8 +147,8 @@ class NetworkImporterService:
         """Execute network-importer in apply mode (calculate diffs and apply changes)"""
         self.logger.info("Executing network apply (diff calculation + sync)...")
         
-        # Initialize the importer - this will log to our database
-        ni.init()
+        # Initialize the importer with site filter
+        ni.init(limit=f"site={self.job.site_code}")
         
         # Calculate diff first - this will log to our database
         diff = ni.diff()
