@@ -24,12 +24,23 @@ def execute_network_import_task(self, job_id: str, check: bool = False) -> dict[
     """
     Execute network import as a Celery task.
     
+    This task retrieves a job by ID, generates the appropriate network-importer
+    configuration, and executes the network import operation using NetworkImporterService.
+    It handles both check mode (diff calculation only) and apply mode (sync changes).
+    
+    The task updates job status throughout execution and captures all execution results,
+    including success/failure status and any error messages.
+    
     Args:
         job_id: UUID string of the NetworkImporterJob
         check: If True, run in check mode (diff only)
         
     Returns:
-        Dictionary with execution results
+        Dictionary with execution results containing:
+        - success: Boolean indicating if operation succeeded
+        - message: Human-readable status message
+        - result: (Optional) Details of the operation result
+        - error: (Optional) Error message if operation failed
         
     Raises:
         Retry: If task should be retried due to transient failure
@@ -54,12 +65,16 @@ def execute_network_import_task(self, job_id: str, check: bool = False) -> dict[
         service = NetworkImporterService(job, config_dict)
         result = service.run(check=check)
         
-        # Update job status on completion
-        job.status = 'completed'
+        # Update job status based on result success
+        if result.get('success', False):
+            job.status = 'completed'
+        else:
+            job.status = 'failed'
+            
         job.completed_at = timezone.now()
         job.save()
         
-        logger.info(f"Network import task completed for job {job_id}")
+        logger.info(f"Network import task completed for job {job_id} with status: {job.status}")
         return result
         
     except NetworkImporterJob.DoesNotExist:
@@ -91,7 +106,7 @@ def execute_network_import_task(self, job_id: str, check: bool = False) -> dict[
             logger.info(f"Retrying task for job {job_id} (attempt {self.request.retries + 1})")
             raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
         
-        return {'success': False, 'error': str(exc)}
+        return {'success': False, 'error': str(exc), 'message': 'Import failed'}
 
 @shared_task
 def cleanup_old_jobs_task(days_old: int = 30) -> dict[str, Any]:

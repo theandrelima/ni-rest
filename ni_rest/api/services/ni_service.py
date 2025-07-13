@@ -30,6 +30,12 @@ class NetworkImporterService:
         
         self.logger.info(f"Starting network import ({mode} mode) for site: {self.job.site_code}")
         
+        # Add test messages to verify logging capture
+        self.logger.debug("TESTING: This is a DEBUG test message")
+        self.logger.info("TESTING: This is an INFO test message")
+        self.logger.warning("TESTING: This is a WARNING test message")
+        self.logger.error("TESTING: This is an ERROR test message")
+        
         try:
             self.logger.debug("Loading network-importer configuration")
             
@@ -161,58 +167,66 @@ class NetworkImporterService:
             "diff": str(diff) if diff else "No differences found",
             "changes_applied": bool(diff)
         }
-    
+
     def _hijack_network_importer_logging(self) -> None:
-        """Replace network-importer loggers with our database logger"""
-        
-        # Store original handlers for restoration
-        self._original_handlers = {}
-        self._original_propagate = {}
-        
-        # Only hijack specific network-importer loggers, not root logger
-        ni_logger_names = [
+        """
+        Add database logging to key loggers without disrupting the existing logging system.
+        """
+        # Don't manipulate existing handlers, just add our handlers to key loggers
+        key_loggers = [
+            '',  # Root logger
             'network_importer',
-            'network_importer.core',
             'network_importer.main',
-            'network_importer.adapters',
-            'network_importer.drivers',
-            'network_importer.models',
-            'network_importer.config',
-            'network_importer.utils'
+            'bax_network_importer',
+            'napalm',
+            'nornir',
+            'netmiko',
+            'ni_rest'
         ]
         
-        # Replace each logger
-        for logger_name in ni_logger_names:
-            ni_logger = logging.getLogger(logger_name)
-            
-            # Store original handlers and propagate setting
-            self._original_handlers[logger_name] = ni_logger.handlers.copy()
-            self._original_propagate[logger_name] = ni_logger.propagate
-            
-            # Replace with our handlers
-            ni_logger.handlers.clear()
-            for handler in self.logger.handlers:
-                ni_logger.addHandler(handler)
-            
-            ni_logger.setLevel(logging.DEBUG)
-            ni_logger.propagate = False  # Prevent double logging
+        # Store which loggers we've modified so we can clean up only those
+        self._modified_loggers = []
         
-        self.logger.info("Network-importer logging redirected to NI-REST database")
+        for name in key_loggers:
+            logger = logging.getLogger(name)
+            # Save original level to restore later
+            if not hasattr(self, '_original_levels'):
+                self._original_levels = {}
+            self._original_levels[name] = logger.level
+            
+            # Just add our handlers without removing existing ones
+            for handler in self.logger.handlers:
+                if handler not in logger.handlers:
+                    logger.addHandler(handler)
+            
+            # Ensure debug messages are captured
+            logger.setLevel(logging.DEBUG)
+            
+            # Keep track of which loggers we modified
+            self._modified_loggers.append(name)
+        
+        self.logger.info("Database logging enabled for network-importer")
     
     def _restore_original_logging(self) -> None:
-        """Restore original logging configuration"""
-        
-        if hasattr(self, '_original_handlers'):
-            for logger_name, original_handlers in self._original_handlers.items():
-                ni_logger = logging.getLogger(logger_name)
-                ni_logger.handlers.clear()
-                
-                # Restore original handlers
-                for handler in original_handlers:
-                    ni_logger.addHandler(handler)
-                
-                # Restore original propagate setting
-                if logger_name in self._original_propagate:
-                    ni_logger.propagate = self._original_propagate[logger_name]
-        
-        self.logger.info("Original logging configuration restored")
+        """
+        Remove our handlers from loggers without disrupting the rest of the system.
+        """
+        try:
+            # Only restore loggers we actually modified
+            if hasattr(self, '_modified_loggers'):
+                for name in self._modified_loggers:
+                    logger = logging.getLogger(name)
+                    
+                    # Remove only our handlers
+                    for handler in list(logger.handlers):
+                        if handler in self.logger.handlers:
+                            logger.removeHandler(handler)
+                    
+                    # Restore original level
+                    if hasattr(self, '_original_levels') and name in self._original_levels:
+                        logger.setLevel(self._original_levels[name])
+            
+            self.logger.info("Database logging handlers removed")
+        except Exception as e:
+            # Log the error but don't crash
+            self.logger.error(f"Error cleaning up logging: {str(e)}")
