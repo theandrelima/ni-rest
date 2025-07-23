@@ -56,8 +56,10 @@ class NetworkImporterService:
             # Create NetworkImporter instance with correct parameters
             ni = NetworkImporter(check_mode=check)
             
-            # Initialize network importer and fetch configurations
+            # Initialize network importer and fetch configurations with proper error handling
+            self.logger.info("About to initialize network importer...")
             ni = self._initialize_network_importer(ni)
+            self.logger.info("Network importer initialization completed successfully")
             
             # Execute based on mode
             if check:
@@ -138,14 +140,29 @@ class NetworkImporterService:
         Returns:
             Initialized NetworkImporter instance with configurations fetched
         """
-        # Initialize the importer with site filter
-        ni.init(limit=f"site={self.job.site_code}")
-        
-        # Update device configurations
-        self.logger.info("Fetching device configurations...")
-        ni.update_configurations()
-        
-        return ni
+        try:
+            # Initialize the importer with site filter
+            self.logger.info(f"Initializing network importer with site filter: site={self.job.site_code}")
+            ni.init(limit=f"site={self.job.site_code}")
+            self.logger.info("Network importer initialization completed")
+            
+            # Check inventory after initialization
+            if hasattr(ni, 'nornir') and hasattr(ni.nornir, 'inventory'):
+                host_count = len(ni.nornir.inventory.hosts)
+                self.logger.info(f"Inventory loaded with {host_count} hosts")
+                if host_count == 0:
+                    self.logger.warning("No hosts found in inventory after filtering - this may cause issues")
+            
+            # Update device configurations
+            self.logger.info("Fetching device configurations...")
+            ni.update_configurations()
+            self.logger.info("Device configuration fetch completed")
+            
+            return ni
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize network importer: {str(e)}", exc_info=True)
+            raise
     
     def _execute_check(self, ni: NetworkImporter) -> dict[str, Any]:
         """Execute network-importer in check mode (calculate diffs only)"""
