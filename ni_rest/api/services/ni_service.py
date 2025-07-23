@@ -183,42 +183,40 @@ class NetworkImporterService:
             "changes_applied": bool(diff)
         }
 
-    def _hijack_network_importer_logging(self) -> None:
+    def _hijack_network_importer_logging(self, verbose_logs: bool = False) -> None:
         """
-        Add database logging to key loggers without disrupting the existing logging system.
+        Attach DB handler to network-importer and suppress noisy third-party loggers.
         """
-        # Don't manipulate existing handlers, just add our handlers to key loggers
-        key_loggers = [
-            '',  # Root logger
-            'network_importer',
-            'network_importer.main',
-            'bax_network_importer',
-            'napalm',
-            'nornir',
-            'netmiko',
-            'ni_rest'
+        # Set noisy libraries to ERROR or CRITICAL
+        noisy_loggers = [
+            "pybatfish", "netaddr", "urllib3", "netmiko", 
+            "paramiko.transport", "nornir.core.task"
         ]
         
-        # Store which loggers we've modified so we can clean up only those
-        self._modified_loggers = []
+        for logger_name in noisy_loggers:
+            logging.getLogger(logger_name).setLevel(logging.ERROR)
         
-        for name in key_loggers:
-            logger = logging.getLogger(name)
-            # Save original level to restore later
-            if not hasattr(self, '_original_levels'):
-                self._original_levels = {}
-            self._original_levels[name] = logger.level
-            
-            # Just add our handlers without removing existing ones
-            for handler in self.logger.handlers:
-                if handler not in logger.handlers:
-                    logger.addHandler(handler)
-            
-            # Ensure debug messages are captured
-            logger.setLevel(logging.DEBUG)
-            
-            # Keep track of which loggers we modified
-            self._modified_loggers.append(name)
+        # Store original levels for restoration
+        self._original_levels = {}
+        
+        # Target the main network-importer logger and its children
+        ni_logger = logging.getLogger("network-importer")
+        level = logging.DEBUG if verbose_logs else logging.INFO
+        
+        # Store original level for restoration
+        self._original_levels["network-importer"] = ni_logger.level
+        ni_logger.setLevel(level)
+        
+        # Remove existing handlers to prevent duplicate logging
+        for handler in list(ni_logger.handlers):
+            ni_logger.removeHandler(handler)
+        
+        # Add our custom DB handler
+        for handler in self.logger.handlers:
+            ni_logger.addHandler(handler)
+        
+        # Track that we've modified just this logger tree
+        self._modified_loggers = ["network-importer"]
         
         self.logger.info("Database logging enabled for network-importer")
     
