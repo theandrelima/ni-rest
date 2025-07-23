@@ -56,6 +56,9 @@ class NetworkImporterService:
             # Create NetworkImporter instance with correct parameters
             ni = NetworkImporter(check_mode=check)
             
+            # Initialize network importer and fetch configurations
+            ni = self._initialize_network_importer(ni)
+            
             # Execute based on mode
             if check:
                 result = self._execute_check(ni)
@@ -124,12 +127,29 @@ class NetworkImporterService:
         
         return sanitized
     
+    def _initialize_network_importer(self, ni: NetworkImporter) -> NetworkImporter:
+        """
+        Common initialization for network importer operations.
+        Initializes the network importer and fetches device configurations.
+        
+        Args:
+            ni: NetworkImporter instance
+            
+        Returns:
+            Initialized NetworkImporter instance with configurations fetched
+        """
+        # Initialize the importer with site filter
+        ni.init(limit=f"site={self.job.site_code}")
+        
+        # Update device configurations
+        self.logger.info("Fetching device configurations...")
+        ni.update_configurations()
+        
+        return ni
+    
     def _execute_check(self, ni: NetworkImporter) -> dict[str, Any]:
         """Execute network-importer in check mode (calculate diffs only)"""
         self.logger.info("Executing network check (diff calculation)...")
-        
-        # Initialize the importer with site filter
-        ni.init(limit=f"site={self.job.site_code}")
         
         # Calculate diff without applying changes - this will log to our database
         diff = ni.diff()
@@ -146,9 +166,6 @@ class NetworkImporterService:
     def _execute_apply(self, ni: NetworkImporter) -> dict[str, Any]:
         """Execute network-importer in apply mode (calculate diffs and apply changes)"""
         self.logger.info("Executing network apply (diff calculation + sync)...")
-        
-        # Initialize the importer with site filter
-        ni.init(limit=f"site={self.job.site_code}")
         
         # Calculate diff first - this will log to our database
         diff = ni.diff()
