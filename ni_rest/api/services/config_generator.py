@@ -1,6 +1,7 @@
 from typing import Any
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
+from django.utils.crypto import get_random_string
 from network_importer.config import DEFAULT_DRIVERS_MAPPING
 from ..models import (
     NetworkImporterInventorySettings,
@@ -272,8 +273,6 @@ class NetworkImporterConfigGenerator:
             # Check for conflicts before adding each field
             for field, model_value in [
                 ('address', batfish_settings.address),
-                ('network_name', batfish_settings.network_name),
-                ('snapshot_name', batfish_settings.snapshot_name),
                 ('port_v1', batfish_settings.port_v1),
                 ('port_v2', batfish_settings.port_v2),
                 ('use_ssl', batfish_settings.use_ssl)
@@ -287,6 +286,17 @@ class NetworkImporterConfigGenerator:
                     # Add to expanded config
                     expanded_batfish[field] = model_value
 
+            # Handle network_name - honor if provided, otherwise generate
+            if 'network_name' not in batfish_config:
+                # Generate dynamically from site code
+                expanded_batfish['network_name'] = f"BF_NETWORK_{self.site_code.upper()}"
+            
+            # Handle snapshot_name - honor if provided, otherwise generate random
+            if 'snapshot_name' not in batfish_config:
+                # Generate with random string
+                random_string = get_random_string(length=8)
+                expanded_batfish['snapshot_name'] = f"BF_SNAPSHOT_{random_string}"
+                
             # Update batfish config with expanded values
             batfish_config.update(expanded_batfish)
             config['batfish'] = batfish_config
@@ -297,6 +307,7 @@ class NetworkImporterConfigGenerator:
     def _get_default_batfish_config(self) -> dict[str, Any]:
         """
         Get default batfish configuration using first available setting.
+        Dynamically generates network and snapshot names.
         """
         batfish_settings = BatfishServiceSetting.objects.first()
         if not batfish_settings:
@@ -308,12 +319,6 @@ class NetworkImporterConfigGenerator:
         if batfish_settings.address is not None:
             config["address"] = batfish_settings.address
 
-        if batfish_settings.network_name is not None:
-            config["network_name"] = batfish_settings.network_name
-
-        if batfish_settings.snapshot_name is not None:
-            config["snapshot_name"] = batfish_settings.snapshot_name
-
         if batfish_settings.port_v1 is not None:
             config["port_v1"] = batfish_settings.port_v1
 
@@ -322,5 +327,12 @@ class NetworkImporterConfigGenerator:
 
         if batfish_settings.use_ssl is not None:
             config["use_ssl"] = batfish_settings.use_ssl
+
+        # Always generate network_name from site code
+        config["network_name"] = f"BF_NETWORK_{self.site_code.upper()}"
+        
+        # Always generate random snapshot_name
+        random_string = get_random_string(length=8)
+        config["snapshot_name"] = f"BF_SNAPSHOT_{random_string}"
 
         return config
