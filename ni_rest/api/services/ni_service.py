@@ -58,7 +58,49 @@ class NetworkImporterService:
             
             # Initialize network importer and fetch configurations with proper error handling
             self.logger.info("About to initialize network importer...")
-            ni = self._initialize_network_importer(ni)
+            
+            # Initialize with site filter
+            self.logger.info(f"Calling ni.init() with site filter: site={self.job.site_code}")
+            ni.init(limit=f"site={self.job.site_code}")
+            self.logger.info("ni.init() completed")
+            
+            # Check what attributes are available after init
+            self.logger.debug(f"NetworkImporter attributes after init: {dir(ni)}")
+            
+            # Try to access the inventory through the adapter
+            try:
+                if hasattr(ni, 'adapter'):
+                    self.logger.info("Found adapter attribute")
+                    if hasattr(ni.adapter, 'nornir'):
+                        self.logger.info("Found adapter.nornir attribute")
+                        host_count = len(ni.adapter.nornir.inventory.hosts)
+                        self.logger.info(f"Inventory loaded with {host_count} hosts via adapter.nornir")
+                        if host_count == 0:
+                            self.logger.warning("No hosts found in inventory after filtering - no configs will be fetched")
+                    else:
+                        self.logger.warning("adapter.nornir not found")
+                        
+                # Also try the nornir attribute directly (older versions)
+                if hasattr(ni, 'nornir'):
+                    self.logger.info("Found direct nornir attribute")
+                    host_count = len(ni.nornir.inventory.hosts)
+                    self.logger.info(f"Inventory loaded with {host_count} hosts via direct nornir")
+                    if host_count == 0:
+                        self.logger.warning("No hosts found in inventory after filtering - no configs will be fetched")
+                        
+            except Exception as e:
+                self.logger.warning(f"Could not check inventory: {str(e)}")
+            
+            # Update device configurations
+            self.logger.info("Calling ni.update_configurations()...")
+            try:
+                ni.update_configurations()
+                self.logger.info("ni.update_configurations() completed")
+            except Exception as e:
+                self.logger.error(f"update_configurations() failed: {str(e)}", exc_info=True)
+                # Continue anyway - maybe configs are already present
+                self.logger.warning("Continuing despite update_configurations() failure")
+            
             self.logger.info("Network importer initialization completed successfully")
             
             # Execute based on mode
@@ -128,41 +170,6 @@ class NetworkImporterService:
                 sanitized['network']['password'] = '********'
         
         return sanitized
-    
-    def _initialize_network_importer(self, ni: NetworkImporter) -> NetworkImporter:
-        """
-        Common initialization for network importer operations.
-        Initializes the network importer and fetches device configurations.
-        
-        Args:
-            ni: NetworkImporter instance
-            
-        Returns:
-            Initialized NetworkImporter instance with configurations fetched
-        """
-        try:
-            # Initialize the importer with site filter
-            self.logger.info(f"Initializing network importer with site filter: site={self.job.site_code}")
-            ni.init(limit=f"site={self.job.site_code}")
-            self.logger.info("Network importer initialization completed")
-            
-            # Check inventory after initialization
-            if hasattr(ni, 'nornir') and hasattr(ni.nornir, 'inventory'):
-                host_count = len(ni.nornir.inventory.hosts)
-                self.logger.info(f"Inventory loaded with {host_count} hosts")
-                if host_count == 0:
-                    self.logger.warning("No hosts found in inventory after filtering - this may cause issues")
-            
-            # Update device configurations
-            self.logger.info("Fetching device configurations...")
-            ni.update_configurations()
-            self.logger.info("Device configuration fetch completed")
-            
-            return ni
-            
-        except Exception as e:
-            self.logger.error(f"Failed to initialize network importer: {str(e)}", exc_info=True)
-            raise
     
     def _execute_check(self, ni: NetworkImporter) -> dict[str, Any]:
         """Execute network-importer in check mode (calculate diffs only)"""
