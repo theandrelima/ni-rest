@@ -55,10 +55,11 @@ INSTALLED_APPS = [
     'django_filters',
     'django_celery_results',
     'drf_spectacular',
-    'ni_rest.api',  # Updated path to API app
+    'ni_rest.api',
+    'ni_rest.gui',
 ]
 
-# REST Framework Configuration
+# REST Framework Configuration - FIXED AUTHENTICATION ORDER
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -90,7 +91,7 @@ CELERY_ENABLE_UTC = True
 
 # Graceful fallback settings
 CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'False').lower() == 'true'
-CELERY_TASK_EAGER_PROPAGATES = True  # Propagate exceptions in eager mode
+CELERY_TASK_EAGER_PROPAGATES = True
 
 # Task routing
 CELERY_TASK_ROUTES = {
@@ -115,6 +116,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'ni_rest.core.middleware.APIAuthenticationMiddleware',  # Add custom middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -125,10 +127,11 @@ ROOT_URLCONF = 'ni_rest.core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'ni_rest' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
@@ -141,13 +144,9 @@ TEMPLATES = [
 WSGI_APPLICATION = 'ni_rest.core.wsgi.application'
 
 # Database configuration with optional DATABASE_URL support
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 DATABASES = get_database_config()
 
 # Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -164,24 +163,28 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
+# Static files
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    BASE_DIR / 'ni_rest' / 'static',
+]
 
-STATIC_URL = 'static/'
+# Login/Logout URLs - UPDATED FOR DASHBOARD
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'dashboard:home'  # Updated from 'gui:home'
+LOGOUT_REDIRECT_URL = 'logged_out'
+
+# Session settings for better security
+SESSION_COOKIE_AGE = 3600
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_SAVE_EVERY_REQUEST = True
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Add Spectacular settings
@@ -192,12 +195,16 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': '/api/',
-    'SERVE_AUTHENTICATION': ['rest_framework.authentication.TokenAuthentication'],
+    'SERVE_AUTHENTICATION': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication'
+    ],
     'SWAGGER_UI_SETTINGS': {
         'deepLinking': True,
         'persistAuthorization': True,
         'displayOperationId': True,
     },
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAuthenticated'],
 }
 
 STATIC_ROOT = os.getenv("STATIC_ROOT", "/app/staticfiles")

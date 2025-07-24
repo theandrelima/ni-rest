@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block title %}Execute Job - NI-REST{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Execute Network Import</h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 col-md-10 mx-auto">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Job Configuration</h6>
+            </div>
+            <div class="card-body">
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <strong>Error:</strong> Please correct the errors below.
+                        {% if form.non_field_errors %}
+                            <ul>
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                
+                <form method="post" class="job-execution-form">
+                    {% csrf_token %}
+                    
+                    <!-- Dry Run Checkbox - NOW FIRST -->
+                    <div class="form-group dry-run-checkbox mb-4">
+                        <div class="form-check">
+                            {{ form.dry_run }}
+                            <label class="form-check-label" for="{{ form.dry_run.id_for_label }}">
+                                {{ form.dry_run.label }}
+                            </label>
+                        </div>
+                        {% if form.dry_run.errors %}
+                            <div class="invalid-feedback d-block">{{ form.dry_run.errors.0 }}</div>
+                        {% endif %}
+                        {% if form.dry_run.help_text %}
+                            <small class="form-text text-muted">{{ form.dry_run.help_text }}</small>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Site Code Field - NOW SECOND -->
+                    <div class="form-group">
+                        <label for="{{ form.site_code.id_for_label }}">Site Code:</label>
+                        {{ form.site_code }}
+                        {% if form.site_code.errors %}
+                            <div class="invalid-feedback d-block">{{ form.site_code.errors.0 }}</div>
+                        {% endif %}
+                        {% if form.site_code.help_text %}
+                            <small class="form-text text-muted">{{ form.site_code.help_text }}</small>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Inventory Settings -->
+                    <div class="form-group">
+                        <label for="{{ form.inventory_settings.id_for_label }}">Inventory Settings:</label>
+                        {{ form.inventory_settings }}
+                        {% if form.inventory_settings.errors %}
+                            <div class="invalid-feedback d-block">{{ form.inventory_settings.errors.0 }}</div>
+                        {% endif %}
+                        {% if form.inventory_settings.help_text %}
+                            <small class="form-text text-muted">{{ form.inventory_settings.help_text }}</small>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Network Credentials -->
+                    <div class="form-group">
+                        <label for="{{ form.network_credentials.id_for_label }}">Network Credentials:</label>
+                        {{ form.network_credentials }}
+                        {% if form.network_credentials.errors %}
+                            <div class="invalid-feedback d-block">{{ form.network_credentials.errors.0 }}</div>
+                        {% endif %}
+                        {% if form.network_credentials.help_text %}
+                            <small class="form-text text-muted">{{ form.network_credentials.help_text }}</small>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Batfish Settings -->
+                    <div class="form-group">
+                        <label for="{{ form.batfish_settings.id_for_label }}">Batfish Settings:</label>
+                        {{ form.batfish_settings }}
+                        {% if form.batfish_settings.errors %}
+                            <div class="invalid-feedback d-block">{{ form.batfish_settings.errors.0 }}</div>
+                        {% endif %}
+                        {% if form.batfish_settings.help_text %}
+                            <small class="form-text text-muted">{{ form.batfish_settings.help_text }}</small>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Extra Settings - NEW FIELD AT END -->
+                    <div class="form-group">
+                        <label for="{{ form.extra_settings.id_for_label }}">Extra Settings:</label>
+                        {{ form.extra_settings }}
+                        {% if form.extra_settings.errors %}
+                            <div class="invalid-feedback d-block">{{ form.extra_settings.errors.0 }}</div>
+                        {% endif %}
+                        {% if form.extra_settings.help_text %}
+                            <small class="form-text text-muted">{{ form.extra_settings.help_text }}</small>
+                        {% endif %}
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Submit Button - DISABLED -->
+                    <div class="form-group mb-0">
+                        <button type="submit" class="btn btn-primary btn-lg w-100" disabled>
+                            <i class="bi bi-play-circle me-2"></i>Execute Job
+                        </button>
+                        <p class="form-unavailable mt-2">Execute form not yet available. Use the API to submit job executions.</p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

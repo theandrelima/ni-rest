@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - NI-REST{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Total Jobs</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-clipboard-data fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Completed</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.completed }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-check-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start-warning shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Running</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.running }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-arrow-clockwise fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-start-danger shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                            Failed</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.failed }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-x-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Jobs -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+        <h6 class="m-0 font-weight-bold text-primary">Recent Jobs</h6>
+        <a href="{% url 'dashboard:job_list' %}" class="btn btn-sm btn-primary">
+            View All
+        </a>
+    </div>
+    <div class="card-body">
+        {% if recent_jobs %}
+            <div class="table-responsive">
+                <table class="table table-hover table-striped">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Site</th>
+                            <th>Mode</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>User</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in recent_jobs %}
+                            <tr>
+                                <td>{{ job.site_code }}</td>
+                                <td>
+                                    <span class="badge {% if job.mode == 'apply' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                        {{ job.get_mode_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge {% if job.status == 'completed' %}bg-success{% elif job.status == 'failed' %}bg-danger{% elif job.status == 'running' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ job.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ job.created_at|date:"Y-m-d H:i:s" }}</td>
+                                <td>{{ job.user.username }}</td>
+                                <td>
+                                    <a href="{% url 'dashboard:job_detail' job.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center p-4">
+                <p class="text-muted">No jobs have been executed yet</p>
+                <a href="{% url 'dashboard:execute_job' %}" class="btn btn-primary">
+                    <i class="bi bi-play"></i> Execute New Job
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

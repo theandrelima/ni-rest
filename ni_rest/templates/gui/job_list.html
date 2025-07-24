@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+
+{% block title %}Job History - NI-REST{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Job History</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{% url 'dashboard:execute_job' %}" class="btn btn-sm btn-primary">
+            <i class="bi bi-play"></i> New Job
+        </a>
+    </div>
+</div>
+
+<!-- Search and Filters -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Search & Filter</h6>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="site" class="form-label">Site</label>
+                <input type="text" class="form-control" id="site" name="site_code" value="{{ request.GET.site_code|default:'' }}">
+            </div>
+            
+            <div class="col-md-3">
+                <label for="status" class="form-label">Status</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">All Statuses</option>
+                    {% for status_val, status_name in status_choices %}
+                        <option value="{{ status_val }}" {% if request.GET.status == status_val %}selected{% endif %}>{{ status_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-3">
+                <label for="mode" class="form-label">Mode</label>
+                <select class="form-select" id="mode" name="mode">
+                    <option value="">All Modes</option>
+                    {% for mode_val, mode_name in mode_choices %}
+                        <option value="{{ mode_val }}" {% if request.GET.mode == mode_val %}selected{% endif %}>{{ mode_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary me-2">Apply Filters</button>
+                <a href="{% url 'dashboard:job_list' %}" class="btn btn-outline-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Jobs Table -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Jobs</h6>
+    </div>
+    <div class="card-body">
+        {% if jobs %}
+            <div class="table-responsive">
+                <table class="table table-hover table-striped">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Site</th>
+                            <th>Mode</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Started</th>
+                            <th>Completed</th>
+                            <th>User</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in jobs %}
+                            <tr>
+                                <td>{{ job.site_code }}</td>
+                                <td>
+                                    <span class="badge {% if job.mode == 'apply' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                        {{ job.get_mode_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge {% if job.status == 'completed' %}bg-success{% elif job.status == 'failed' %}bg-danger{% elif job.status == 'running' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ job.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ job.created_at|date:"Y-m-d H:i:s" }}</td>
+                                <td>{{ job.started_at|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                                <td>{{ job.completed_at|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                                <td>{{ job.user.username }}</td>
+                                <td>
+                                    <a href="{% url 'dashboard:job_detail' job.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if is_paginated %}
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center mt-4">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">&laquo; First</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo; First</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">Previous</span>
+                            </li>
+                        {% endif %}
+                        
+                        {% for i in paginator.page_range %}
+                            {% if page_obj.number == i %}
+                                <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                            {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ i }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ i }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Last &raquo;</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Next</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">Last &raquo;</span>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            {% endif %}
+        {% else %}
+            <div class="text-center p-4">
+                <p class="text-muted">No jobs found matching your criteria</p>
+                <a href="{% url 'dashboard:execute_job' %}" class="btn btn-primary">
+                    <i class="bi bi-play"></i> Execute New Job
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

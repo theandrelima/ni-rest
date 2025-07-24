@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Login - NI-REST{% endblock %}
+
+{% block unauthenticated_content %}
+<div class="centered-page-container">
+    <div class="login-card">
+        <div class="card shadow">
+            <div class="card-header text-center bg-primary text-white">
+                <img src="{% static 'img/busybee.png' %}" alt="NI-REST Logo" class="bee-logo-login my-3">
+                <h3 class="mb-2">Network Importer REST!</h3>
+            </div>
+            <div class="card-body">
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <strong>Error:</strong> Your username and password didn't match. Please try again.
+                    </div>
+                {% endif %}
+                
+                <form method="post" action="{% url 'login' %}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">Username</label>
+                        <input type="text" name="username" class="form-control" id="id_username" required autofocus>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_password" class="form-label">Password</label>
+                        <input type="password" name="password" class="form-control" id="id_password" required>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Sign In</button>
+                    </div>
+                    
+                    <input type="hidden" name="next" value="{{ next }}">
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

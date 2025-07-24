@@ -1,0 +1,38 @@
+{% load static %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary rounded-top">
+    <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center" href="{% url 'dashboard:home' %}">
+            <img src="{% static 'img/honeycomb.png' %}" alt="NI-REST Mini Logo" class="bee-mini-logo me-2">
+            <span>NI-REST</span>
+        </a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="navbarContent">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle"></i> {{ user.username }}
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{% url 'admin:index' %}">
+                            <i class="bi bi-gear"></i> Admin Panel
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <!-- POST form for logout -->
+                            <form method="post" action="{% url 'logout' %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="dropdown-item logout-btn">
+                                    <i class="bi bi-box-arrow-right"></i> Logout
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>

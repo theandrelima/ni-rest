@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+
+{% block title %}Job Details - NI-REST{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Job Details</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{% url 'dashboard:job_list' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Jobs
+        </a>
+    </div>
+</div>
+
+<!-- Job Summary -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Job Summary</h6>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table">
+                    <tr>
+                        <th style="width: 30%">Job ID:</th>
+                        <td><code>{{ job.id }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Site:</th>
+                        <td>{{ job.site_code }}</td>
+                    </tr>
+                    <tr>
+                        <th>Mode:</th>
+                        <td>
+                            <span class="badge {% if job.mode == 'apply' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                {{ job.get_mode_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            <span id="job-status" class="badge {% if job.status == 'completed' %}bg-success{% elif job.status == 'failed' %}bg-danger{% elif job.status == 'running' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                {{ job.get_status_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>User:</th>
+                        <td>{{ job.user.username }}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table">
+                    <tr>
+                        <th style="width: 30%">Created:</th>
+                        <td>{{ job.created_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Started:</th>
+                        <td>{{ job.started_at|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Completed:</th>
+                        <td>{{ job.completed_at|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Errors:</th>
+                        <td>{{ job.logs.filter.level__in:"ERROR,CRITICAL"|length }}</td>
+                    </tr>
+                    <tr>
+                        <th>Task ID:</th>
+                        <td>{{ job.celery_task_id|default:"-" }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Logs -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+        <h6 class="m-0 font-weight-bold text-primary">Job Logs</h6>
+        
+        <!-- Log Level Filter -->
+        <div>
+            <div class="btn-group" role="group">
+                <a href="?level=" class="btn btn-sm {% if not request.GET.level %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    All
+                </a>
+                <a href="?level=INFO" class="btn btn-sm {% if request.GET.level == 'INFO' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    Info
+                </a>
+                <a href="?level=WARNING" class="btn btn-sm {% if request.GET.level == 'WARNING' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                    Warning
+                </a>
+                <a href="?level=ERROR" class="btn btn-sm {% if request.GET.level == 'ERROR' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                    Error
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if logs %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Time</th>
+                            <th>Level</th>
+                            <th>Source</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                            <tr>
+                                <td class="text-nowrap">{{ log.timestamp|date:"Y-m-d H:i:s.u" }}</td>
+                                <td>
+                                    <span class="badge {% if log.level == 'ERROR' %}bg-danger{% elif log.level == 'WARNING' %}bg-warning{% elif log.level == 'INFO' %}bg-info{% elif log.level == 'DEBUG' %}bg-secondary{% elif log.level == 'CRITICAL' %}bg-dark{% endif %}">
+                                        {{ log.level }}
+                                    </span>
+                                </td>
+                                <td>{{ log.source|default:"system" }}</td>
+                                <td style="word-break: break-word;"><pre class="mb-0 border-0 bg-transparent p-0">{{ log.message }}</pre></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Log Pagination -->
+            {% if is_paginated %}
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center mt-4">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% if request.GET.level %}&level={{ request.GET.level }}{% endif %}">&laquo; First</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.level %}&level={{ request.GET.level }}{% endif %}">Previous</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo; First</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">Previous</span>
+                            </li>
+                        {% endif %}
+                        
+                        {% for i in paginator.page_range %}
+                            {% if page_obj.number == i %}
+                                <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                            {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ i }}{% if request.GET.level %}&level={{ request.GET.level }}{% endif %}">{{ i }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.level %}&level={{ request.GET.level }}{% endif %}">Next</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ paginator.num_pages }}{% if request.GET.level %}&level={{ request.GET.level }}{% endif %}">Last &raquo;</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Next</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">Last &raquo;</span>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            {% endif %}
+        {% else %}
+            <div class="text-center p-4">
+                <p class="text-muted">No logs available for this job</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-refresh job status if job is running
+    document.addEventListener('DOMContentLoaded', function() {
+        const jobStatus = "{{ job.status }}";
+        const jobId = "{{ job.id }}";
+        
+        if (jobStatus === 'running' || jobStatus === 'queued') {
+            function refreshJobStatus() {
+                fetch(`/api/jobs/${jobId}/`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const statusBadge = document.getElementById('job-status');
+                    let badgeClass = '';
+                    
+                    if (data.status === 'completed') badgeClass = 'bg-success';
+                    else if (data.status === 'failed') badgeClass = 'bg-danger';
+                    else if (data.status === 'running') badgeClass = 'bg-warning';
+                    else badgeClass = 'bg-secondary';
+                    
+                    statusBadge.textContent = data.get_status_display || data.status;
+                    statusBadge.className = `badge ${badgeClass}`;
+                    
+                    if (data.status === 'running' || data.status === 'queued') {
+                        setTimeout(refreshJobStatus, 5000);
+                    } else {
+                        // Reload page to show complete job data if job completed
+                        window.location.reload();
+                    }
+                })
+                .catch(error => console.error('Error refreshing job status:', error));
+            }
+            
+            setTimeout(refreshJobStatus, 5000);
+        }
+    });
+</script>
+{% endblock %}
