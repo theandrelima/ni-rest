@@ -48,6 +48,9 @@ class JobLogger:
         logger.setLevel(logging.DEBUG)
         logger.handlers.clear()
         
+        # Prevent propagation to root logger to avoid duplicate logs
+        logger.propagate = False
+        
         # Add console handler for development/debugging
         console_handler = logging.StreamHandler()
         console_formatter = logging.Formatter(

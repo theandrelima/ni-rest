@@ -1,12 +1,14 @@
 from typing import Any
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
+from django.utils.crypto import get_random_string
 from network_importer.config import DEFAULT_DRIVERS_MAPPING
 from ..models import (
     NetworkImporterInventorySettings,
     NetworkImporterNetCreds,
     BatfishServiceSetting
 )
+import copy
 
 class NetworkImporterConfigGenerator:
     """   
@@ -60,7 +62,7 @@ class NetworkImporterConfigGenerator:
             site_code: Site identifier used for naming purposes
         """
         self.site_code = site_code
-    
+
     def generate_config_dict(self, config_data: dict[str, Any]) -> dict[str, Any]:
         """        
         This method builds the full configuration structure that would normally
@@ -79,238 +81,258 @@ class NetworkImporterConfigGenerator:
         Raises:
             ValidationError: If referenced models don't exist or have invalid env vars
         """
+        # Start with the user-provided configuration as the base
+        # This ensures all user-provided settings are preserved
+        config = copy.deepcopy(config_data)
         
-        # Base configuration structure - NO LOGS SECTION!
-        config = {
-            "main": self._get_main_config(config_data.get("main", {})),
-            "inventory": self._get_inventory_config(config_data.get("inventory", {})),
-            "network": self._get_network_config(config_data.get("network", {})),
-            "batfish": self._get_batfish_config_internal(config_data.get("batfish")),
-            "drivers": self._get_drivers_config(config_data.get("drivers", {})),
-        }
+        # Process required sections with special handling
+        self._process_inventory_section(config)
+        self._process_network_section(config)
+        self._process_batfish_section(config)
         
-        # Add optional user-configurable sections if provided
-        if "adapters" in config_data:
-            config["adapters"] = self._get_adapters_config(config_data["adapters"])
+        # Add defaults for main section if not present
+        if 'main' not in config:
+            config['main'] = self._get_default_main_config()
+            
+        # Add defaults for drivers if not present
+        if 'drivers' not in config:
+            config['drivers'] = {'mapping': DEFAULT_DRIVERS_MAPPING.copy()}
+        elif 'mapping' not in config['drivers']:
+            config['drivers']['mapping'] = DEFAULT_DRIVERS_MAPPING.copy()
+       
+        # Clean up internal reference fields that network-importer doesn't expect
+        self._cleanup_internal_reference_fields(config)
         
         return config
-    
-    def _get_main_config(self, main_data: dict[str, Any]) -> dict[str, Any]:
+
+    def _cleanup_internal_reference_fields(self, config: dict[str, Any]) -> None:
         """
-        Get main configuration section with defaults.
+        Remove internal reference fields that are not expected by network-importer.
         
         Args:
-            main_data: Main section configuration data
-            
-        Returns:
-            Dictionary with main configuration including defaults
+            config: Configuration dictionary to clean up in place
         """
+        # Remove inventory.name after it's been used for credential lookup
+        if 'inventory' in config and isinstance(config['inventory'], dict):
+            config['inventory'].pop('name', None)
+            
+        # Remove network.credentials_name after it's been used for credential lookup
+        if 'network' in config and isinstance(config['network'], dict):
+            config['network'].pop('credentials_name', None)
+            
+        # Remove batfish.name after it's been used for configuration lookup
+        if 'batfish' in config and isinstance(config['batfish'], dict):
+            config['batfish'].pop('name', None)
+
+    def _get_default_main_config(self) -> dict[str, Any]:
+        """Get default main configuration settings."""
         return {
-            "import_ips": main_data.get("import_ips", True),
-            "import_prefixes": main_data.get("import_prefixes", True),
-            "import_cabling": main_data.get("import_cabling", "cdp"),
-            "import_intf_status": main_data.get("import_intf_status", False),
-            "import_vlans": main_data.get("import_vlans", "cli"),
-            "backend": main_data.get("backend", "nautobot"),
-            "nbr_workers": main_data.get("nbr_workers", 10)
+            "import_ips": True,
+            "import_prefixes": True,
+            "import_cabling": "cdp",
+            "import_intf_status": False,
+            "import_vlans": "cli",
+            "backend": "nautobot",
+            "nbr_workers": 10
         }
-    
-    def _get_inventory_config(self, inventory_data: dict[str, Any]) -> dict[str, Any]:
+
+    def _require_section_and_key_and_model(self, config: dict, section: str, key: str, model_cls, model_field: str):
         """
-        Get inventory configuration using NetworkImporterInventorySettings model.
-        
+        Generalized check for section existence, type, key presence, and model lookup.
+
         Args:
-            inventory_data: Inventory section configuration data
-                          Must contain 'name' referencing a NetworkImporterInventorySettings
-            
+            config: The configuration dictionary.
+            section: The section name (e.g., 'inventory').
+            key: The key to check within the section (e.g., 'name').
+            model_cls: The Django model class to look up.
+            model_field: The field name in the model to match.
+
         Returns:
-            Dictionary with inventory configuration and resolved credentials
-            
+            (section_obj, model_instance): The section dictionary and the model instance.
+
         Raises:
-            ValidationError: If name is missing or invalid
+            ValidationError: If any check fails or the model instance is not found.
         """
-        config = {}
-        
-        # Handle supported platforms
-        if "supported_platforms" in inventory_data:
-            config["supported_platforms"] = inventory_data["supported_platforms"]
-        else:
-            config["supported_platforms"] = ["cisco_ios", "cisco_asa", "cisco_nxos", "juniper_junos", "arista_eos"]
-        
-        # Get settings from model
-        inventory_name = inventory_data.get("name")
-        if not inventory_name:
-            raise ValidationError("inventory.name is required")
-        
+        if section not in config:
+            raise ValidationError(f"{section} section is required")
+
+        section_obj = config[section]
+        if not isinstance(section_obj, dict):
+            raise ValidationError(f"{section} must be a dictionary")
+
+        if key not in section_obj:
+            raise ValidationError(f"{section}.{key} is required")
+
+        ref_value = section_obj[key]
         try:
-            inventory_settings = get_object_or_404(NetworkImporterInventorySettings, name=inventory_name)
+            model_instance = get_object_or_404(model_cls, **{model_field: ref_value})
         except Exception as e:
-            raise ValidationError(f"Invalid inventory name '{inventory_name}': {str(e)}")
-        
-        # Build settings configuration
+            raise ValidationError(f"Invalid {section} {key} '{ref_value}': {str(e)}")
+
+        return section_obj, model_instance
+
+    def _process_inventory_section(self, config: dict[str, Any]) -> None:
+        """
+        Process inventory section, expanding name reference into credentials.
+
+        Args:
+            config: Configuration dictionary to modify in place
+
+        Raises:
+            ValidationError: If name reference is invalid or credentials not found
+        """
+        inventory, inventory_settings = self._require_section_and_key_and_model(
+            config, 'inventory', 'name', NetworkImporterInventorySettings, 'name'
+        )
+
+        # Check if settings section already exists to prevent overwriting user values
+        if 'settings' in inventory:
+            raise ValidationError(
+                "inventory.settings is already defined in the config. "
+                "This would conflict with the credentials lookup."
+            )
+
         try:
-            config["settings"] = {
+            inventory_credentials = {
                 "address": inventory_settings.address,
                 "token": inventory_settings.token,  # This will access the property
                 "verify_ssl": inventory_settings.verify_ssl,
-                "timeout": inventory_data.get("timeout", 30),
-                "page_size": inventory_data.get("page_size", 1000),
-                "max_workers": inventory_data.get("max_workers", 10)
             }
+            # Add settings to inventory dict
+            inventory['settings'] = inventory_credentials
         except ValidationError as e:
-            raise ValidationError(f"Error accessing inventory settings for '{inventory_name}': {str(e)}")
-        
-        return config
-    
-    def _get_network_config(self, network_data: dict[str, Any]) -> dict[str, Any]:
+            raise ValidationError(f"Error accessing inventory settings for '{inventory['name']}': {str(e)}")
+
+    def _process_network_section(self, config: dict[str, Any]) -> None:
         """
-        Get network configuration using NetworkImporterNetCreds model.
-        
+        Process network section, expanding credentials_name into login/password.
+
         Args:
-            network_data: Network section configuration data
-                         Must contain 'credentials_name' referencing a NetworkImporterNetCreds
-            
-        Returns:
-            Dictionary with network configuration and resolved credentials
-            
+            config: Configuration dictionary to modify in place
+
         Raises:
-            ValidationError: If credentials_name is missing or invalid
+            ValidationError: If credentials_name is invalid or credentials not found
         """
-        config = {}
-        
-        # Handle FQDNs
-        config["fqdns"] = network_data.get("fqdns", [])
-        
-        # Get credentials from model
-        credentials_name = network_data.get("credentials_name")
-        if not credentials_name:
-            raise ValidationError("network.credentials_name is required")
-        
+        network, net_creds = self._require_section_and_key_and_model(
+            config, 'network', 'credentials_name', NetworkImporterNetCreds, 'name'
+        )
+
+        # Check for potential conflicts
+        if 'login' in network:
+            raise ValidationError(
+                "network.login is already defined in the config. "
+                "This would conflict with the credentials lookup."
+            )
+
+        if 'password' in network:
+            raise ValidationError(
+                "network.password is already defined in the config. "
+                "This would conflict with the credentials lookup."
+            )
+
         try:
-            net_creds = get_object_or_404(NetworkImporterNetCreds, name=credentials_name)
-        except Exception as e:
-            raise ValidationError(f"Invalid network credentials_name '{credentials_name}': {str(e)}")
-        
-        # Build network configuration with credentials
-        try:
-            config["login"] = net_creds.login      # This will access the property
-            config["password"] = net_creds.password  # This will access the property
+            network['login'] = net_creds.login      # This will access the property
+            network['password'] = net_creds.password  # This will access the property
         except ValidationError as e:
-            raise ValidationError(f"Error accessing network credentials for '{credentials_name}': {str(e)}")
-        
-        # Handle optional enable field
-        if "enable" in network_data:
-            config["enable"] = network_data["enable"]
-        
-        # Handle netmiko_extras subsection
-        if "netmiko_extras" in network_data:
-            config["netmiko_extras"] = {
-                "global_delay_factor": network_data["netmiko_extras"].get("global_delay_factor", 15),
-                "banner_timeout": network_data["netmiko_extras"].get("banner_timeout", 5),
-                "conn_timeout": network_data["netmiko_extras"].get("conn_timeout", 5),
-                "session_timeout": network_data["netmiko_extras"].get("session_timeout", 60),
-            }
-        
-        return config
-    
-    def _get_adapters_config(self, adapters_data: dict[str, Any]) -> dict[str, Any]:
+            raise ValidationError(f"Error accessing network credentials for '{network['credentials_name']}': {str(e)}")
+
+    def _process_batfish_section(self, config: dict[str, Any]) -> None:
         """
-        Get adapters configuration.
-        
+        Process batfish section if present, or add default batfish settings if not.
+
         Args:
-            adapters_data: Adapters section configuration data
-            
-        Returns:
-            Dictionary with adapters configuration
-        """
-        config = {}
-        
-        # Main adapter classes
-        if "network_class" in adapters_data:
-            config["network_class"] = adapters_data["network_class"]
-        if "sot_class" in adapters_data:
-            config["sot_class"] = adapters_data["sot_class"]
-        
-        # SOT settings subsection
-        if "sot_settings" in adapters_data:
-            config["sot_settings"] = {
-                "warn_on_delete": adapters_data["sot_settings"].get("warn_on_delete", False),
-                "model_flag": adapters_data["sot_settings"].get("model_flag", 1),
-                "batch_size": adapters_data["sot_settings"].get("batch_size", 100),
-                "timeout": adapters_data["sot_settings"].get("timeout", 300)
-            }
-            
-            # Handle optional list fields
-            if "model_flag_tags" in adapters_data["sot_settings"]:
-                config["sot_settings"]["model_flag_tags"] = adapters_data["sot_settings"]["model_flag_tags"]
-        
-        return config
-    
-    def _get_batfish_config_internal(self, batfish_setting_name: str | None = None) -> dict[str, Any]:
-        """
-        Get Batfish configuration from BatfishServiceSetting model.
-        
-        Args:
-            batfish_setting_name: Optional name of specific BatfishServiceSetting to use.
-                                If None, uses the first available BatfishServiceSetting.
-        
-        Returns:
-            Dictionary with Batfish configuration for internal service
-            
+            config: Configuration dictionary to modify in place
+
         Raises:
-            ValidationError: If no BatfishServiceSetting is found
+            ValidationError: If batfish name reference is invalid
         """
-        try:
-            if batfish_setting_name:
-                batfish_settings = get_object_or_404(BatfishServiceSetting, name=batfish_setting_name)
+        # If batfish key exists and is a string, convert to dict with name
+        if 'batfish' in config and isinstance(config['batfish'], str):
+            config['batfish'] = {'name': config['batfish']}
+
+        # If batfish section exists and has name, process it
+        batfish_config = config.get('batfish', {})
+        if isinstance(batfish_config, dict):
+            batfish_name = batfish_config.get('name')
+
+            if batfish_name:
+                # User provided a batfish name, look it up
+                try:
+                    batfish_settings = get_object_or_404(BatfishServiceSetting, name=batfish_name)
+                except Exception as e:
+                    raise ValidationError(f"Invalid batfish setting name '{batfish_name}': {str(e)}")
             else:
+                # No name provided, use first available
                 batfish_settings = BatfishServiceSetting.objects.first()
                 if not batfish_settings:
                     raise ValidationError("No BatfishServiceSetting found in database")
-        except Exception as e:
-            if batfish_setting_name:
-                raise ValidationError(f"Invalid batfish setting name '{batfish_setting_name}': {str(e)}")
-            else:
-                raise ValidationError(f"Error retrieving batfish settings: {str(e)}")
-        
+
+            # Build config with only non-null values
+            expanded_batfish = {}
+
+            # Check for conflicts before adding each field
+            for field, model_value in [
+                ('address', batfish_settings.address),
+                ('port_v1', batfish_settings.port_v1),
+                ('port_v2', batfish_settings.port_v2),
+                ('use_ssl', batfish_settings.use_ssl)
+            ]:
+                # Only process if the model has a value
+                if model_value is not None:
+                    # Check if field already exists in user-provided config
+                    if field in batfish_config:
+                        # User already has this field, don't overwrite
+                        continue
+                    # Add to expanded config
+                    expanded_batfish[field] = model_value
+
+            # Handle network_name - honor if provided, otherwise generate
+            if 'network_name' not in batfish_config:
+                # Generate dynamically from site code
+                expanded_batfish['network_name'] = f"BF_NETWORK_{self.site_code.upper()}"
+            
+            # Handle snapshot_name - honor if provided, otherwise generate random
+            if 'snapshot_name' not in batfish_config:
+                # Generate with random string
+                random_string = get_random_string(length=8)
+                expanded_batfish['snapshot_name'] = f"BF_SNAPSHOT_{random_string}"
+                
+            # Update batfish config with expanded values
+            batfish_config.update(expanded_batfish)
+            config['batfish'] = batfish_config
+        elif 'batfish' in config:
+            # Batfish is present but not a dict or string - replace with default
+            config['batfish'] = self._get_default_batfish_config()
+
+    def _get_default_batfish_config(self) -> dict[str, Any]:
+        """
+        Get default batfish configuration using first available setting.
+        Dynamically generates network and snapshot names.
+        """
+        batfish_settings = BatfishServiceSetting.objects.first()
+        if not batfish_settings:
+            raise ValidationError("No BatfishServiceSetting found in database")
+
         # Build config with only non-null values
         config = {}
-        
+
         if batfish_settings.address is not None:
             config["address"] = batfish_settings.address
-        
-        if batfish_settings.network_name is not None:
-            config["network_name"] = batfish_settings.network_name
-        
-        if batfish_settings.snapshot_name is not None:
-            config["snapshot_name"] = batfish_settings.snapshot_name
-        
+
         if batfish_settings.port_v1 is not None:
             config["port_v1"] = batfish_settings.port_v1
-        
+
         if batfish_settings.port_v2 is not None:
             config["port_v2"] = batfish_settings.port_v2
-        
+
         if batfish_settings.use_ssl is not None:
             config["use_ssl"] = batfish_settings.use_ssl
+
+        # Always generate network_name from site code
+        config["network_name"] = f"BF_NETWORK_{self.site_code.upper()}"
         
-        return config
-    
-    def _get_drivers_config(self, drivers_data: dict[str, Any]) -> dict[str, Any]:
-        """
-        Get drivers configuration with default mappings.
-        
-        Args:
-            drivers_data: Drivers section configuration data
-            
-        Returns:
-            Dictionary with drivers configuration including default mappings
-        """
-        config = {}
-        
-        config["mapping"] = DEFAULT_DRIVERS_MAPPING.copy()
-        
-        if "mapping" in drivers_data:
-            config["mapping"].update(drivers_data["mapping"])
-        
+        # Always generate random snapshot_name
+        random_string = get_random_string(length=8)
+        config["snapshot_name"] = f"BF_SNAPSHOT_{random_string}"
+
         return config

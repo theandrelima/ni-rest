@@ -58,8 +58,8 @@ class NetworkImporterNetCredsAdmin(admin.ModelAdmin):
 
 @admin.register(BatfishServiceSetting)
 class BatfishServiceSettingAdmin(admin.ModelAdmin):
-    list_display = ['name', 'address', 'network_name', 'created_at']
-    search_fields = ['name', 'address', 'network_name']
+    list_display = ['name', 'address', 'created_at']  # Removed 'network_name'
+    search_fields = ['name', 'address']  # Removed 'network_name'
     readonly_fields = ['created_at', 'updated_at']
 
 # Fix Token duplication - check if already registered and unregister

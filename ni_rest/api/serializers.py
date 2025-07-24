@@ -13,12 +13,18 @@ class NetworkImporterExecuteSerializer(serializers.Serializer):
         return value.strip()
     
     def validate_settings(self, value: dict) -> dict:
-        """Validate settings structure and required nested fields"""
+        """
+        Validate settings with minimal requirements.
+        Only validate that inventory has a name and network has credentials_name.
+        """
         # Validate inventory section
         if 'inventory' not in value:
             raise serializers.ValidationError("settings.inventory is required")
         
-        inventory = value['inventory']
+        inventory = value.get('inventory', {})
+        if not isinstance(inventory, dict):
+            raise serializers.ValidationError("settings.inventory must be a dictionary")
+            
         if 'name' not in inventory:
             raise serializers.ValidationError("settings.inventory.name is required")
         
@@ -26,11 +32,32 @@ class NetworkImporterExecuteSerializer(serializers.Serializer):
         if 'network' not in value:
             raise serializers.ValidationError("settings.network is required")
         
-        network = value['network']
+        network = value.get('network', {})
+        if not isinstance(network, dict):
+            raise serializers.ValidationError("settings.network must be a dictionary")
+            
         if 'credentials_name' not in network:
             raise serializers.ValidationError("settings.network.credentials_name is required")
         
+        # Validate batfish section if present
+        batfish = value.get('batfish', {})
+        if batfish and isinstance(batfish, dict) and 'name' not in batfish:
+            # Only validate if batfish is a dict and doesn't have name
+            raise serializers.ValidationError("If settings.batfish is provided as a dict, it must have a 'name' key")
+        
         return value
+    
+    def validate(self, data: dict) -> dict:
+        """
+        Ensure only the expected root-level keys are processed.
+        Silently drop any other root-level keys.
+        """
+        # Only keep the three expected keys
+        return {
+            'site': data['site'],
+            'mode': data['mode'],
+            'settings': data['settings']
+        }
 
 class JobSerializer(serializers.ModelSerializer):
     success = serializers.ReadOnlyField()

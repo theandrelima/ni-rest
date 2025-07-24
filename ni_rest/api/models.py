@@ -255,18 +255,6 @@ class BatfishServiceSetting(models.Model):
         null=True,
         help_text="Batfish service address (optional)"
     )
-    network_name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Batfish network name (optional)"
-    )
-    snapshot_name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Batfish snapshot name (optional)"
-    )
     port_v1 = models.IntegerField(
         blank=True,
         null=True,

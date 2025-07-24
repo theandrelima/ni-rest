@@ -1,10 +1,12 @@
 import logging
-from typing import Any
+from typing import Any, Dict
 from django.utils import timezone
 from network_importer.config import load
 from network_importer.main import NetworkImporter
 from ..models import NetworkImporterJob
 from .job_logger import JobLogger
+import json
+import copy
 
 class NetworkImporterService:
     """Execute network-importer with direct Python integration and database logging"""
@@ -29,15 +31,51 @@ class NetworkImporterService:
         self.logger.info(f"Starting network import ({mode} mode) for site: {self.job.site_code}")
         
         try:
-            self.logger.debug("Loading network-importer configuration")
-            
             # Load settings directly from our config dict
+            self.logger.info("Loading network-importer configuration")
             _settings = load(config_data=self.config_dict)
             
-            self.logger.info("Creating network-importer instance")
+            # Log the sanitized config dict for traceability (keep this for debugging issues)
+            sanitized_config = self._get_sanitized_config(self.config_dict)
+            self.logger.info(
+                "Network-importer config loaded with settings:\n" +
+                json.dumps(sanitized_config, indent=2, sort_keys=True)
+            )
             
             # Create NetworkImporter instance with correct parameters
+            self.logger.info("Creating network-importer instance")
             ni = NetworkImporter(check_mode=check)
+            
+            # Define the limit filter
+            limit = f"site={self.job.site_code}"
+            
+            # STEP 1: Build the inventory based on the limit
+            self.logger.info(f"Building inventory with filter: {limit}")
+            ni.build_inventory(limit=limit)
+            
+            # Log inventory status (useful info, not debugging)
+            if hasattr(ni, 'nornir'):
+                host_count = len(ni.nornir.inventory.hosts)
+                self.logger.info(f"Inventory loaded with {host_count} hosts")
+                if host_count == 0:
+                    self.logger.warning("No hosts found in inventory - no configs will be fetched")
+            
+            # STEP 2: Update configurations from devices
+            try:
+                ni.update_configurations()
+                self.logger.info("Device configurations updated successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to update configurations: {str(e)}", exc_info=True)
+                # Continue anyway to see if we can proceed with existing data
+            
+            # STEP 3: Initialize NetworkImporter
+            self.logger.info(f"Initializing network-importer with filter: {limit}")
+            try:
+                ni.init(limit=limit)
+                self.logger.info("Network-importer initialized successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize network-importer: {str(e)}", exc_info=True)
+                raise  # Re-raise as this is a critical error
             
             # Execute based on mode
             if check:
@@ -80,13 +118,36 @@ class NetworkImporterService:
         finally:
             # Clean up logging hijack
             self._restore_original_logging()
+
+    def _get_sanitized_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a sanitized copy of the config dict with sensitive data masked.
+        
+        Args:
+            config: Original configuration dictionary
+            
+        Returns:
+            Sanitized copy with sensitive data masked
+        """
+        # Create a deep copy to avoid modifying the original
+        sanitized = copy.deepcopy(config)
+        
+        # Mask inventory token if present
+        if 'inventory' in sanitized and isinstance(sanitized['inventory'], dict):
+            if 'settings' in sanitized['inventory'] and isinstance(sanitized['inventory']['settings'], dict):
+                if 'token' in sanitized['inventory']['settings']:
+                    sanitized['inventory']['settings']['token'] = '********'
+        
+        # Mask network password if present
+        if 'network' in sanitized and isinstance(sanitized['network'], dict):
+            if 'password' in sanitized['network']:
+                sanitized['network']['password'] = '********'
+        
+        return sanitized
     
     def _execute_check(self, ni: NetworkImporter) -> dict[str, Any]:
         """Execute network-importer in check mode (calculate diffs only)"""
         self.logger.info("Executing network check (diff calculation)...")
-        
-        # Initialize the importer - this will log to our database
-        ni.init()
         
         # Calculate diff without applying changes - this will log to our database
         diff = ni.diff()
@@ -103,9 +164,6 @@ class NetworkImporterService:
     def _execute_apply(self, ni: NetworkImporter) -> dict[str, Any]:
         """Execute network-importer in apply mode (calculate diffs and apply changes)"""
         self.logger.info("Executing network apply (diff calculation + sync)...")
-        
-        # Initialize the importer - this will log to our database
-        ni.init()
         
         # Calculate diff first - this will log to our database
         diff = ni.diff()
@@ -124,54 +182,64 @@ class NetworkImporterService:
             "diff": str(diff) if diff else "No differences found",
             "changes_applied": bool(diff)
         }
-    
-    def _hijack_network_importer_logging(self) -> None:
-        """Replace network-importer loggers with our database logger"""
-        
-        # Store original handlers for restoration
-        self._original_handlers = {}
-        
-        # Only hijack specific network-importer loggers, not root logger
-        ni_logger_names = [
-            'network_importer',
-            'network_importer.core',
-            'network_importer.main',
-            'network_importer.adapters',
-            'network_importer.drivers',
-            'network_importer.models',
-            'network_importer.config',
-            'network_importer.utils'
+
+    def _hijack_network_importer_logging(self, verbose_logs: bool = False) -> None:
+        """
+        Attach DB handler to network-importer and suppress noisy third-party loggers.
+        """
+        # Set noisy libraries to ERROR or CRITICAL
+        noisy_loggers = [
+            "pybatfish", "netaddr", "urllib3", "netmiko", 
+            "paramiko.transport", "nornir.core.task"
         ]
         
-        # Replace each logger
-        for logger_name in ni_logger_names:
-            ni_logger = logging.getLogger(logger_name)
-            
-            # Store original handlers
-            self._original_handlers[logger_name] = ni_logger.handlers.copy()
-            
-            # Replace with our handlers
-            ni_logger.handlers.clear()
-            for handler in self.logger.handlers:
-                ni_logger.addHandler(handler)
-            
-            ni_logger.setLevel(logging.DEBUG)
-            ni_logger.propagate = False
+        for logger_name in noisy_loggers:
+            logging.getLogger(logger_name).setLevel(logging.ERROR)
         
-        self.logger.info("Network-importer logging redirected to NI-REST database")
+        # Store original levels for restoration
+        self._original_levels = {}
+        
+        # Target the main network-importer logger and its children
+        ni_logger = logging.getLogger("network-importer")
+        level = logging.DEBUG if verbose_logs else logging.INFO
+        
+        # Store original level for restoration
+        self._original_levels["network-importer"] = ni_logger.level
+        ni_logger.setLevel(level)
+        
+        # Remove existing handlers to prevent duplicate logging
+        for handler in list(ni_logger.handlers):
+            ni_logger.removeHandler(handler)
+        
+        # Add our custom DB handler
+        for handler in self.logger.handlers:
+            ni_logger.addHandler(handler)
+        
+        # Track that we've modified just this logger tree
+        self._modified_loggers = ["network-importer"]
+        
+        self.logger.info("Database logging enabled for network-importer")
     
     def _restore_original_logging(self) -> None:
-        """Restore original logging configuration"""
-        
-        if hasattr(self, '_original_handlers'):
-            for logger_name, original_handlers in self._original_handlers.items():
-                ni_logger = logging.getLogger(logger_name)
-                ni_logger.handlers.clear()
-                
-                # Restore original handlers
-                for handler in original_handlers:
-                    ni_logger.addHandler(handler)
-                
-                ni_logger.propagate = True
-        
-        self.logger.info("Original logging configuration restored")
+        """
+        Remove our handlers from loggers without disrupting the rest of the system.
+        """
+        try:
+            # Only restore loggers we actually modified
+            if hasattr(self, '_modified_loggers'):
+                for name in self._modified_loggers:
+                    logger = logging.getLogger(name)
+                    
+                    # Remove only our handlers
+                    for handler in list(logger.handlers):
+                        if handler in self.logger.handlers:
+                            logger.removeHandler(handler)
+                    
+                    # Restore original level
+                    if hasattr(self, '_original_levels') and name in self._original_levels:
+                        logger.setLevel(self._original_levels[name])
+            
+            self.logger.info("Database logging handlers removed")
+        except Exception as e:
+            # Log the error but don't crash
+            self.logger.error(f"Error cleaning up logging: {str(e)}")
