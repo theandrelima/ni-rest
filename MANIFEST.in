@@ -1,0 +1,4 @@
+include README.md
+include LICENSE
+recursive-include ni_rest/templates *.html
+recursive-include ni_rest/static *

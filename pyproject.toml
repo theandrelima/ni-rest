@@ -32,10 +32,17 @@ postgres = [
 ]
 
 [project.scripts]
-ni-rest = "cli.main:main"  # Calling main() function instead of app directly
+ni-rest = "cli.main:main"
 
 [tool.setuptools]
-packages = {find = {}}
+packages = {find = {where = ["."], include = ["ni_rest*", "cli*"]}}
+include-package-data = true
+
+[tool.setuptools.package-data]
+"ni_rest" = ["templates/**/*.html", "static/**/*", "**/*.html", "**/*.css", "**/*.js", "**/*.png", "**/*.svg", "**/*.ico"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*.pyc", "*.pyo", "__pycache__/*"]
 
 [tool.uv.sources]
 network-importer = { git = "https://github.com/theandrelima/network-importer.git", rev = "updating_dependencies" }
